@@ -1,0 +1,47 @@
+# Core scientific stack
+numpy
+pandas
+scipy
+
+# Plotting
+matplotlib
+seaborn
+plotly
+
+# Machine learning
+scikit-learn
+imbalanced-learn
+statsmodels
+
+# Text mining / NLP
+nltk
+gensim
+regex
+transformers
+tokenizers
+textdistance
+jellyfish
+unidecode
+python-slugify
+tqdm
+
+# Web scraping (used in TM01 capstone)
+requests
+requests-file
+beautifulsoup4
+lxml
+scrapy
+tldextract
+w3lib
+
+# Excel / IO
+openpyxl
+
+# Jupyter (mostly already present)
+jupyter
+notebook
+ipykernel
+ipywidgets
+
+# Mentioned in section 0.3 of the notebook
+geocoder
