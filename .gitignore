@@ -1,1 +1,22 @@
+#Python
+text_mining_project/
+__pycache__/
+*.pyc
+
+# uv / virtual environment
+text_mining_project/
+
+
+# Environment variables — never commit secrets
 .env
+.env.*.local
+markdowns/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
