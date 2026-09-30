@@ -1,0 +1,10 @@
+### EDA 30/09/2026 
+
+- [x] Distribuião de densidade do tamanho das musicas por categoria 
+- [ ]Tirar as 178 musicas duplicadas
+- [ ] dar match as mais de 500 musicas que não têm artista 
+- [ ] responder as 10 perguntas que faltam do inicio do EDA 
+- [x] visualização da distribuição das categorias
+- [ ] corrigir os anos e mudar o dtype para datetime
+
+
