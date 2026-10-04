@@ -1,12 +1,31 @@
 ### EDA 30/09/2026 
 
-**Oquê que falta**
+**Oque falta/ preprocessing**
 
 - [x] Distribuião de densidade do tamanho das musicas por categoria 
 - [ ]Tirar as 178 musicas duplicadas
-- [ ] dar match as mais de 500 musicas que não têm artista 
-- [ ] responder as 10 perguntas que faltam do inicio do EDA 
+- [ ] dar match as mais de 500 musicas que não têm artista
+- [ ] responder as 10 perguntas que faltam do inicio do EDA
 - [x] visualização da distribuição das categorias
 - [ ] corrigir os anos e mudar o dtype para datetime
+- [ ] Univariate Analysis
+- [ ] Bivariate Analysis
+- [ ] Multivariate Analysis
+
+
+### EDA 04-10-26 (Maiara)
+
+**Oque falta/ preprocessing**
+
+- [x] Distribuião de densidade do tamanho das musicas por categoria 
+- [x] visualização da distribuição das categorias
+- [x] corrigir os anos e mudar o dtype para datetime
+- [x] Univariate Analysis
+- [x] Bivariate Analysis
+- [ ] Multivariate Analysis
+- [ ]Tirar as 178 musicas duplicadas
+- [ ] dar match as mais de 500 musicas que não têm artista (do Genius)
+- [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percei porque é que temos imensas perguntas ass: Maiara)
+
 
 
