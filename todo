@@ -25,7 +25,31 @@
 - [ ] Multivariate Analysis
 - [ ]Tirar as 178 musicas duplicadas
 - [ ] dar match as mais de 500 musicas que não têm artista (do Genius)
-- [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percei porque é que temos imensas perguntas ass: Maiara)
+- [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percebi porque é que temos imensas perguntas ass: Maiara)
+
+### EDA 05-10-26 (Cícero)
+
+- [ ] Responder a segunda pergunta do inicio do EDA(caracteristicas das lyrics por genero)
+- [ ] input nos 500 artistas que o seu nome foi perdido ao traduzir as músicas para inglês (Recomendação do professor: usar webscrapping por exemplo)
+- [ ] Análise de trends temporais
+
+
+### PARA SABERMOS QUAIS JÁ ESTÃO ANSWERED:
+### Questions this notebook aims to answer
+- [x] 1. **Class balance** — how are genres distributed? Is `tag` imbalanced?
+
+- [x] 2. **Text characteristics** — how does lyric length, vocabulary size, and repetitiveness vary by genre?
+- [x] 3. **Missing/dirty data** — are there empty lyrics, duplicates, non-English text, or malformed entries?
+- [ ] 4. **Temporal trends** — how does genre popularity or lyrical style shift across `year`?
+- [ ] 5. **Popularity signal** — does `views` correlate with genre, lyric length, or era?
+- [ ] 6. **Vocabulary & language** — what words/n-grams are most distinctive per genre (candidates for feature engineering)?
+- [ ] 7. **Train vs. test consistency** - o train.csv and test.csv (implied by sample_submission.csv) share similar distributions of year, views, and lyric length?
+- [ ] 8. **Artist/genre overlap** - does the same artist appear under multiple tag values?
+- [ ] 9. **Genius formatting artifacts** - lyrics scraped from Genius typically contain bracketed annotations ([Chorus], [Verse 1], [Produced by...]) 
+- [ ] 10. **Duplicate/near-duplicate lyrics** - covers, remixes, or scraping errors can produce near-identical lyrics under different ids
+- [x] 11. **Structural/repetition patterns** - chorus repetition rate, line count, average line length — these often differ meaningfully by genre 
+- [x] 12. **Explicit/profanity rate by genre** - often strong signal for genre classification
+
 
 ### EDA 07-10-26 (Mariana)
 
