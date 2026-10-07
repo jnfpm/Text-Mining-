@@ -27,5 +27,42 @@
 - [ ] dar match as mais de 500 musicas que não têm artista (do Genius)
 - [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percei porque é que temos imensas perguntas ass: Maiara)
 
+### EDA 07-10-26 (Mariana)
+
+**Oque falta/ preprocessing**
+
+- [x] Distribuião de densidade do tamanho das musicas por categoria 
+- [x] visualização da distribuição das categorias
+- [x] corrigir os anos e mudar o dtype para datetime
+- [x] Univariate Analysis
+- [x] Multivariate Analysis
+- [x] função preprocessamento em processo
+- [x] notebook organizado
+- [x] Tirar as 178 musicas duplicadas
+- [ ] dar match as mais de 500 musicas que não têm artista (do Genius)
+- [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percei porque é que temos imensas perguntas ass: Maiara)
 
 
+
+Tirei isto do EDA porque achei que estava overstimulated e pus uma intro :
+# Exploratory Data Analysis 
+
+**Goal:** Explore the Song Lyrics dataset to understand its structure, content, and quality before building a model to classify songs by genre (`tag`).
+
+### Questions this notebook aims to answer
+1. **Class balance** — how are genres distributed? Is `tag` imbalanced?
+
+2. **Text characteristics** — how does lyric length, vocabulary size, and repetitiveness vary by genre?
+3. **Missing/dirty data** — are there empty lyrics, duplicates, non-English text, or malformed entries?
+4. **Temporal trends** — how does genre popularity or lyrical style shift across `year`?
+5. **Popularity signal** — does `views` correlate with genre, lyric length, or era?
+6. **Vocabulary & language** — what words/n-grams are most distinctive per genre (candidates for feature engineering)?
+7. **Train vs. test consistency** - o train.csv and test.csv (implied by sample_submission.csv) share similar distributions of year, views, and lyric length?
+8. **Artist/genre leakage** - does the same artist appear under multiple tag values, or does the same artist show up in both train and test?
+9. **Genius formatting artifacts** - lyrics scraped from Genius typically contain bracketed annotations ([Chorus], [Verse 1], [Produced by...]) 
+10. **Duplicate/near-duplicate lyrics** - covers, remixes, or scraping errors can produce near-identical lyrics under different ids
+11. **Structural/repetition patterns** - chorus repetition rate, line count, average line length — these often differ meaningfully by genre 
+12. **Explicit/profanity rate by genre** - often strong signal for genre classification
+
+### Approach
+We will start with structural checks (shape, dtypes, nulls, duplicates), then move to  EDA (length distributions, word frequencies, TF-IDF-style genre signatures), then try to answer those specific questions and close with visualizations that motivate the modeling choices for genre classification.
