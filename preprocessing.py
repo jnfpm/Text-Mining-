@@ -14,12 +14,12 @@ def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
     essential_cols = [col for col in ["lyrics", "tag"] if col in prepared.columns]
     prepared = prepared.dropna(subset=essential_cols) """
 
-    # Drop variations (remixes, acoustics, live, etc.)
+    # Drop duplicates (remixes, acoustics, live, etc.)
     if "title" in prepared.columns:
         variations_pattern = r"(?i)\b(remix|acoustic|live|version|edit|instrumental|cover|stripp?ed|mix)\b"
         prepared = prepared[~prepared["title"].str.contains(variations_pattern, na=False, regex=True)]
 
-    if "lyrics" in prepared.columns: #just in case
+    if "lyrics" in prepared.columns: # se eles tiverem varios records com o mesmo nome/ letra deixamos só o primeiro mas se vamos fazer  web scrapping talvez isto n faça muito sentido porque conseguimos logo perceber o género certo.
         # Drop duplicates based on lyrics to keep only the original
         prepared = prepared.drop_duplicates(subset=["lyrics"], keep="first")
 
@@ -37,7 +37,7 @@ def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
         numeric_year = pd.to_numeric(year_text, errors="coerce")
         date_year = pd.to_datetime(year_text, errors="coerce").dt.year
         parsed_year = numeric_year.fillna(date_year)
-        valid_year = parsed_year.ge(1900) & parsed_year.le(2026) & parsed_year.mod(1).eq(0)
+        valid_year = parsed_year.ge(1900) & parsed_year.le(2026) & parsed_year.mod(1).eq(0) # se vamos imputar com o web scrapping isto aqui n faz sentido
         prepared["year"] = parsed_year.where(valid_year).astype("Int64")
 
     if "views" in prepared.columns:
