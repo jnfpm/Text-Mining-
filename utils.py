@@ -1,14 +1,13 @@
 #File used to store relevant functions that we may need
 import re
 import nltk
+import pandas as pd
 import requests
 import os
 from dotenv import load_dotenv
 from unidecode import unidecode
 from nltk.tokenize.treebank import TreebankWordDetokenizer
-import requests
-import os
-from dotenv import load_dotenv
+import time
 
 load_dotenv(override=True)   # override=True: re-read .env even if the variable was already loaded earlier in this kernel
 token = os.getenv('GENIUS_API_KEY')
@@ -72,26 +71,60 @@ def get_song_info(song_id):
     
     s = r.json()['response']['song'] # transforma a resposta que vem em json em um dict, vai para a informação util do pedido
     
+    # nas traduções o primary_artist é o tradutor; o artista original vem em 'translation_of'
+    artist = s['primary_artist']['name']
+    
     # devolve um dicionario com a id,titulo, artista e year tirado do json
+    for rel in s['song_relationships']:
+        if rel['relationship_type'] == 'translation_of' and rel['songs']:
+            artist = rel['songs'][0]['primary_artist']['name']
     
     return {
         'id': song_id,
         'title': s['title'],
-        'artist': s['primary_artist']['name'],
+        'artist': artist,
         'release_date': s.get('release_date'),
     }
 
-def get_info_batch(id : pd.DataFrame or list[int],title = False,artist = False,release_date = False) : 
+def get_info_batch(ids : pd.DataFrame or list[int],title = False,artist = False,release_date = False) : 
     ''' 
     Recebe uma lista ou dataframe de song_id e transforma em um dataframe com os argumentos que queremos saídos do Genius
     '''
+    rows = []
     
+    for song_id in ids:
+        try:
+            rows.append(get_song_info(song_id))
+        except requests.RequestException:   # 404 (música apagada), timeout, erro na rede
+            rows.append({'id': song_id})    # fica só o id, o resto NaN
+        time.sleep(0.25)
     # recebe todos os id e transforma-os em um dataframe
-    songs = pd.DataFrame([get_song_info(i) for i in id]).set_index('id')
+    
+    songs = pd.DataFrame(rows).set_index('id')
+
+    wanted = [name for name, keep in [('title', title), ('artist', artist), ('release_date', release_date)] if keep]
+    return songs.reindex(columns=wanted)
+    
+    #songs = pd.DataFrame([get_song_info(i) for i in id]).set_index('id')
     
     # boolean mask apenas mete no daframe final os argumentos que são true
-    filtered_songs = songs.loc[:,[title,artist,release_date]]
-    print(filtered_songs)
+    #filtered_songs = songs.loc[:,[title,artist,release_date]]
+    #print(filtered_songs)
 
 
+def artist_from_title(title):
+    t = re.sub(r'\s*english\s+translation\s*$', '', title, flags=re.I)
+    parts = re.split(r'\s[-–—]\s', t, maxsplit=1)
+    return parts[0].strip() if len(parts) == 2 else None
+
+def fix_translation_artists(df):
+    '''
+    Recebe um dataframe com as colunas id e title, já só com as de artista Genius English Translation 
+    e devolve um novo com o id,artista, correto
+    '''
     
+    result = df[['id']].copy()
+    result['artist'] = df['title'].fillna('').map(artist_from_title)
+
+    return result
+
