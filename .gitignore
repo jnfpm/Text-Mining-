@@ -1,0 +1,18 @@
+# Environment variables - never commit secrets
+.env
+.env.*.local
+
+# Virtual environment
+text_mining_project/
+
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
