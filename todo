@@ -4,7 +4,7 @@
 
 - [x] Distribuião de densidade do tamanho das musicas por categoria 
 - [ ]Tirar as 178 musicas duplicadas
-- [ ] dar match as mais de 500 musicas que não têm artista
+- [x] dar match as mais de 500 musicas que não têm artista
 - [ ] responder as 10 perguntas que faltam do inicio do EDA
 - [x] visualização da distribuição das categorias
 - [ ] corrigir os anos e mudar o dtype para datetime
@@ -24,13 +24,13 @@
 - [x] Bivariate Analysis
 - [ ] Multivariate Analysis
 - [ ]Tirar as 178 musicas duplicadas
-- [ ] dar match as mais de 500 musicas que não têm artista (do Genius)
+- [x] dar match as mais de 500 musicas que não têm artista (do Genius)
 - [ ] responder as 10 perguntas que faltam do inicio do EDA (Não percebi porque é que temos imensas perguntas ass: Maiara)
 
 ### EDA 05-10-26 (Cícero)
 
-- [ ] Responder a segunda pergunta do inicio do EDA(caracteristicas das lyrics por genero)
-- [ ] input nos 500 artistas que o seu nome foi perdido ao traduzir as músicas para inglês (Recomendação do professor: usar webscrapping por exemplo)
+- [x] Responder a segunda pergunta do inicio do EDA(caracteristicas das lyrics por genero)
+- [x] input nos 500 artistas que o seu nome foi perdido ao traduzir as músicas para inglês (Recomendação do professor: usar webscrapping por exemplo)
 - [ ] Análise de trends temporais
 
 

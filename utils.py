@@ -1,8 +1,17 @@
 #File used to store relevant functions that we may need
 import re
 import nltk
+import requests
+import os
+from dotenv import load_dotenv
 from unidecode import unidecode
 from nltk.tokenize.treebank import TreebankWordDetokenizer
+import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)   # override=True: re-read .env even if the variable was already loaded earlier in this kernel
+token = os.getenv('GENIUS_API_KEY')
 
 #Basic functions that will probably be needed to clean/preprocess the Lyrics
 
@@ -50,3 +59,39 @@ def stemming_all(token):
     porter_stemmer = nltk.stem.PorterStemmer()
     return [[porter_stemmer.stem(token) for token in token]]
 
+# chamada a API do genius que retorna os atributos da musica
+def get_song_info(song_id):
+    '''
+    Faz uma chamada(request) à API, dá o id da música e recebe(get) o id, o titulo, o artista, e a data de acordo 
+    com a base de dados do Genius
+    '''
+    r = requests.get(f'https://api.genius.com/songs/{song_id}', #site do genius para fazer calls a API
+                     headers={'Authorization': f'Bearer {token}'}, timeout=20) #usa a API key no .env para ser auturizado a fazer a call
+    
+    r.raise_for_status() # verefica se pedido correu bem
+    
+    s = r.json()['response']['song'] # transforma a resposta que vem em json em um dict, vai para a informação util do pedido
+    
+    # devolve um dicionario com a id,titulo, artista e year tirado do json
+    
+    return {
+        'id': song_id,
+        'title': s['title'],
+        'artist': s['primary_artist']['name'],
+        'release_date': s.get('release_date'),
+    }
+
+def get_info_batch(id : pd.DataFrame or list[int],title = False,artist = False,release_date = False) : 
+    ''' 
+    Recebe uma lista ou dataframe de song_id e transforma em um dataframe com os argumentos que queremos saídos do Genius
+    '''
+    
+    # recebe todos os id e transforma-os em um dataframe
+    songs = pd.DataFrame([get_song_info(i) for i in id]).set_index('id')
+    
+    # boolean mask apenas mete no daframe final os argumentos que são true
+    filtered_songs = songs.loc[:,[title,artist,release_date]]
+    print(filtered_songs)
+
+
+    
