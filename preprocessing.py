@@ -1,29 +1,25 @@
 import pandas as pd
 
 
-
 def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
-    # already-separated data split
+    """
+    Clean-only preprocessing for dataset structure.
+
+    Keep metadata corrections like artist/year imputation for a later stage,
+    after the split, because they depend on external information from Genius.
+    """
     prepared = data.copy()
 
- """   # Impute missing titles with 'unknown'
-    if "title" in prepared.columns:
-        prepared["title"] = prepared["title"].fillna("unknown")
-
-    # Handle missing values: drop rows where essential columns are missing
-    essential_cols = [col for col in ["lyrics", "tag"] if col in prepared.columns]
-    prepared = prepared.dropna(subset=essential_cols) """
-
-    # Drop duplicates (remixes, acoustics, live, etc.)
+    # 1) Remove obvious duplicate/alternative versions that are not original tracks.
     if "title" in prepared.columns:
         variations_pattern = r"(?i)\b(remix|acoustic|live|version|edit|instrumental|cover|stripp?ed|mix)\b"
         prepared = prepared[~prepared["title"].str.contains(variations_pattern, na=False, regex=True)]
 
-    if "lyrics" in prepared.columns: # se eles tiverem varios records com o mesmo nome/ letra deixamos só o primeiro mas se vamos fazer  web scrapping talvez isto n faça muito sentido porque conseguimos logo perceber o género certo.
-        # Drop duplicates based on lyrics to keep only the original
+    # 2) Remove exact duplicate lyrics, keeping the first occurrence.
+    if "lyrics" in prepared.columns:
         prepared = prepared.drop_duplicates(subset=["lyrics"], keep="first")
 
-    # Normalize text formatting while leaving blank values available for missingness checks.
+    # 3) Normalize string columns without altering semantic metadata values.
     for column in ("title", "artist", "tag", "features"):
         if column in prepared.columns:
             values = prepared[column].astype("string").str.strip()
@@ -31,18 +27,40 @@ def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
                 values = values.str.lower()
             prepared[column] = values
 
-    if "year" in prepared.columns:
-        # Parse numeric or date-like years; future and non-integral years become missing.
-        year_text = prepared["year"].astype("string").str.strip()
-        numeric_year = pd.to_numeric(year_text, errors="coerce")
-        date_year = pd.to_datetime(year_text, errors="coerce").dt.year
-        parsed_year = numeric_year.fillna(date_year)
-        valid_year = parsed_year.ge(1900) & parsed_year.le(2026) & parsed_year.mod(1).eq(0) # se vamos imputar com o web scrapping isto aqui n faz sentido
-        prepared["year"] = parsed_year.where(valid_year).astype("Int64")
-
-    if "views" in prepared.columns:
-        # View counts cannot be negative or non-numeric.
-        views = pd.to_numeric(prepared["views"], errors="coerce")
-        prepared["views"] = views.where(views >= 0)
-
     return prepared
+
+from utils import get_info_batch, artist_from_title
+
+
+def fix_metadata(df):
+    df = df.copy()
+
+    if "song_id" in df.columns:
+        # 1) corrigir artistas do tipo Genius English Translations
+        if "artist" in df.columns and "title" in df.columns:
+            mask = df["artist"].fillna("").str.contains("Genius|Translation", case=False, na=False)
+
+            ids = df.loc[mask, "song_id"].dropna().unique()
+            if len(ids) > 0:
+                meta = get_info_batch(ids, artist=True, release_date=True).reset_index()
+                meta = meta.rename(columns={"id": "song_id"})
+                df = df.merge(meta, on="song_id", how="left", suffixes=("", "_api"))
+
+                df.loc[mask, "artist"] = df.loc[mask, "artist_api"].combine_first(
+                    df.loc[mask, "title"].map(artist_from_title)
+                )
+
+    # 2) corrigir anos inferiores a 1900
+    if "year" in df.columns and "song_id" in df.columns:
+        invalid_year_mask = pd.to_numeric(df["year"], errors="coerce") < 1900
+
+        ids = df.loc[invalid_year_mask, "song_id"].dropna().unique()
+        if len(ids) > 0:
+            meta = get_info_batch(ids, release_date=True).reset_index()
+            meta = meta.rename(columns={"id": "song_id"})
+            df = df.merge(meta, on="song_id", how="left", suffixes=("", "_api"))
+
+            release_year = pd.to_datetime(df["release_date_api"], errors="coerce").dt.year
+            df.loc[invalid_year_mask, "year"] = release_year.loc[invalid_year_mask]
+
+    return df

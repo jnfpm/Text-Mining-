@@ -1,18 +1,39 @@
-#File used to store relevant functions that we may need
+# file used to store relevant functions that we may need
+# In a notebook, install dependencies with:
+#!pip install pandas requests python-dotenv unidecode nltk
+# and then:
+# import nltk
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
+
 import re
+import os
+import time
 import nltk
 import pandas as pd
 import requests
-import os
-import time
 from dotenv import load_dotenv
 from unidecode import unidecode
 from nltk.tokenize.treebank import TreebankWordDetokenizer
 
+
+def ensure_nltk_data():
+    """Download the corpora used by the text-preprocessing functions if missing."""
+    required = ['punkt', 'stopwords', 'wordnet']
+    for resource in required:
+        try:
+            nltk.data.find(resource)
+        except LookupError:
+            nltk.download(resource)
+
+
+ensure_nltk_data()
+
 load_dotenv(override=True)   # override=True: re-read .env even if the variable was already loaded earlier in this kernel
 token = os.getenv('GENIUS_API_KEY')
 
-#Basic functions that will probably be needed to clean/preprocess the Lyrics
+# basic functions that will probably be needed to clean/preprocess the Lyrics
 
 def removing_stopwords(lyrics):
     '''Remove stopwords from the lyrics'''
@@ -28,8 +49,8 @@ def clean_lyrics(lyrics):
     lyrics = re.sub(r'\[.*?\]', '', lyrics)  # Remove text within brackets
     lyrics = lyrics.lower() #ower case all the lyrics
     lyrics = re.sub(r'[^a-zA-Z0-9\s]', '', lyrics)  # Remove special characters
-    lyrics = re.sub(r'\s+', ' ', lyrics)  # Replace multiple spaces with a single space
-    return lyrics.strip()  # Remove leading and trailing whitespace
+    lyrics = re.sub(r'\s+', ' ', lyrics)  # replace multiple spaces with a single space
+    return lyrics.strip()  # remove leading and trailing whitespace
 
 def tokenize_lyrics(lyrics):
     '''Tokenize the lyrics and remove unwanted characters like abreviations and contractions'''
@@ -40,7 +61,7 @@ def tokenize_lyrics(lyrics):
     tokenized_text = [re.sub("'s","is",token) for token in tokenized_text]
     return tokenized_text
 
-#turning tokens into lemmas (using literally the function from class notebooks)
+# turning tokens into lemmas (using literally the function from class notebooks)
 def lemmatize_all(token, list_pos=["n","v","a","r","s"]):
     """Apply WordNet lemmatization for each requested part-of-speech tag.
 
