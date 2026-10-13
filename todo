@@ -90,3 +90,25 @@ Tirei isto do EDA porque achei que estava overstimulated e pus uma intro :
 
 ### Approach
 We will start with structural checks (shape, dtypes, nulls, duplicates), then move to  EDA (length distributions, word frequencies, TF-IDF-style genre signatures), then try to answer those specific questions and close with visualizations that motivate the modeling choices for genre classification.
+
+
+
+
+### Pre-processing 13/10/26 (Maiara)
+
+- [ ] **Lyric Cleaning**: Apply cleaning functions from `utils` (remove structural section tags like `[Chorus]`, punctuation, HTML, extra whitespace)
+- [ ] **Decide on Song Structure**: Choose whether to keep lyrics as a single corpus or parse sections into separate columns, and document the rationale
+- [ ] **Text Normalization**:
+- Case normalization (lowercase)
+- Word normalization (slang, standard word forms)
+- Date / numerical normalization
+- [ ] **Tokenization**:
+- Word tokenization
+- Contraction & boundary handling (hyphenated terms, slang, apostrophes)
+- [ ] **Stopword Removal**: Decide whether to remove or keep stopwords and document the reasoning
+- [ ] **P.O.S. Tagging** *(Optional / Contextual)*: Tag grammatical roles to support lemmatization or sentiment feature filtering
+- [ ] **Lemmatization vs. Stemming**: Choose Porter/Snowball/Lancaster stemmer vs. WordNet lemmatizer and justify the choice
+- [ ] **Text Representation & Feature Extraction**:
+- Convert text to numbers (CountVectorizer, TF-IDF, or embeddings)
+- Feature scaling / vector normalization
+- Vocabulary filtering (`min_df`/`max_df`, n-grams) & feature selection
