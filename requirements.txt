@@ -18,6 +18,7 @@ statsmodels
 
 # Text mining / NLP
 nltk
+vaderSentiment
 gensim
 regex
 transformers
