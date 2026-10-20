@@ -123,3 +123,9 @@ We will start with structural checks (shape, dtypes, nulls, duplicates), then mo
     - [x] Tokenization - maiara
     - [x] padding
     - [ ] Chamar tudo no notebook 
+
+### Pre-processing 21/10/26 (Maiara)
+
+- [ ] filtrar dos artistas com 'Genius' no nome, quais é que são actual artists
+- [ ] imputar os anos 
+
