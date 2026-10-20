@@ -149,3 +149,26 @@ def fix_translation_artists(df):
 
     return result
 
+def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
+    """
+    Applies padding to a list of tokenized lyrics so they all have the same length.
+    """
+    # 1. If no len is provided, automatically find the length of the longest song
+    if max_len is None:
+        max_len = max(len(lyrics) for lyrics in tokenized_lyrics_list)
+    
+    padded_dataset = []
+    
+    for lyrics in tokenized_lyrics_list:
+        if len(lyrics) < max_len:
+            # If the song is shorter, append the padding_token at the END (Post-padding)
+            num_padding_needed = max_len - len(lyrics)
+            padded_lyrics = lyrics + [padding_token] * num_padding_needed
+        else:
+            # If the song is longer than max_len, truncate it
+            padded_lyrics = lyrics[:max_len]
+            
+        padded_dataset.append(padded_lyrics)
+        
+    return padded_dataset
+

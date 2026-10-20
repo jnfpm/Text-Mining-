@@ -112,3 +112,14 @@ We will start with structural checks (shape, dtypes, nulls, duplicates), then mo
 - Convert text to numbers (CountVectorizer, TF-IDF, or embeddings)
 - Feature scaling / vector normalization
 - Vocabulary filtering (`min_df`/`max_df`, n-grams) & feature selection
+
+### Pre-processing 14/10/26 (Joana)
+
+- [ ] **Sentiment Analysis**: 
+    - [x] Converts lyrics text to lowercase - mariana (preprocessing function)
+    - [x] Removes special characters and punctuation - maiara 
+    - [ ] Creates sentiment labels from lyrics
+    - [ ] Removes rows with missing values - com api (mariana)
+    - [x] Tokenization - maiara
+    - [x] padding
+    - [ ] Chamar tudo no notebook 
