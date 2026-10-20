@@ -126,16 +126,24 @@ def get_info_batch(ids : pd.DataFrame or list[int],title = False,artist = False,
     return songs.reindex(columns=wanted)
 
 def artist_from_title(title):
-    t = re.sub(r'\s*english\s+translation\s*$', '', title, flags=re.I)
+    # Strip common translation suffixes before trying to extract the artist
+    t = re.sub(
+        r'\s*(english\s+)?translations?\s*$'
+        r'|\s*traduc\w*\s*$'           # Spanish/Portuguese: traducción, tradução
+        r'|\s*traduction\s*$'          # French
+        r'|\s*\(.*?translat\w*\)\s*$', # e.g. "(Official English Translation)"
+        '', title, flags=re.I
+    )
     parts = re.split(r'\s[-–—]\s', t, maxsplit=1)
     return parts[0].strip() if len(parts) == 2 else None
 
 def fix_translation_artists(df):
     '''
-    Recebe um dataframe com as colunas id e title, já só com as de artista Genius English Translation 
-    e devolve um novo com o id,artista, correto
+    Recebe um dataframe com as colunas id e title, já só com as linhas cujo
+    artista é uma conta da plataforma Genius (e.g. "Genius English Translations",
+    "Rap Genius") e devolve um novo dataframe com id e o artista real extraído
+    do título. Devolve None quando o título não segue o formato "Artista - Título".
     '''
-    
     result = df[['id']].copy()
     result['artist'] = df['title'].fillna('').map(artist_from_title)
 

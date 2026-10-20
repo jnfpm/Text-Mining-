@@ -31,6 +31,7 @@ tqdm
 # Web scraping (used in TM01 capstone)
 requests
 requests-file
+python-dotenv
 beautifulsoup4
 lxml
 scrapy
