@@ -149,6 +149,89 @@ def fix_translation_artists(df):
 
     return result
 
+def fix_all_translation_artists(df):
+    """Return a copy with Genius translation-account artists inferred from titles.
+
+    Rows whose artist cannot be extracted from the title are left unchanged.
+    """
+    result = df.copy()
+    translation_artist_mask = result['artist'].astype('string').str.contains(
+        r'\bgenius\b.*\b(?:translat\w*|trad\w*|romaniz\w*|romanis\w*|transliter\w*)\b',
+        case=False,
+        na=False,
+        regex=True,
+    )
+    inferred_artists = result.loc[translation_artist_mask, 'title'].fillna('').map(
+        artist_from_title
+    )
+    replace_mask = inferred_artists.notna() & inferred_artists.ne('')
+    result.loc[inferred_artists.index[replace_mask], 'artist'] = inferred_artists.loc[
+        replace_mask
+    ]
+
+    return result
+
+
+
+def correct_pre_years(treshold, data, split_name, suspicious_year_threshold=1800):
+    """Correct pre-threshold years and classify Genius lookup results by ID.
+
+    Years below ``suspicious_year_threshold`` and rows with no usable API year
+    are set to ``pd.NA``. Suspicious and not-found IDs are returned separately.
+    """
+    data = data.copy()
+    numeric_year = pd.to_numeric(data['year'], errors='coerce')
+    mask = numeric_year < treshold
+    ids = data.loc[mask, 'id']
+
+    print(f"{split_name}: {len(ids)} rows with years before {treshold}")
+    if ids.empty:
+        return data, [], [], []
+
+    info = get_info_batch(ids, release_date=True)
+    fetched_years = pd.to_numeric(
+        info['release_date'].astype('string').str.extract(r'(\d{4})', expand=False),
+        errors='coerce'
+    )
+
+    replacements = data.loc[mask, 'id'].map(fetched_years)
+    has_year = replacements.notna()
+    suspicious = has_year & replacements.lt(suspicious_year_threshold)
+    resolved = has_year & ~suspicious
+    not_found = ~has_year
+
+    data.loc[replacements.index[resolved], 'year'] = replacements[resolved].astype(int)
+    clear_year = suspicious | not_found
+    if clear_year.any():
+        data['year'] = data['year'].astype('object')
+        data.loc[replacements.index[clear_year], 'year'] = pd.NA
+
+    resolved_ids = data.loc[replacements.index[resolved], 'id'].tolist()
+    suspicious_ids = data.loc[replacements.index[suspicious], 'id'].tolist()
+    not_found_ids = data.loc[replacements.index[not_found], 'id'].tolist()
+
+    print(f"{split_name}: accepted {resolved.sum()} years; "
+          f"{suspicious.sum()} suspicious; {not_found.sum()} not found")
+    return data, resolved_ids, suspicious_ids, not_found_ids
+
+def summarize_years(frame, ids, split, status):
+    years = pd.to_numeric(
+        frame.loc[frame['id'].isin(ids), 'year'],
+        errors='coerce'
+    ).dropna()
+
+    return {
+        'split': split,
+        'status': status,
+        'rows_with_year': len(years),
+        'minimum_year': years.min() if not years.empty else None,
+        'years_below_1900': int((years < 1900).sum()),
+        'maximum_year': years.max() if not years.empty else None,
+    }
+
+
+
+
 def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
     """
     Applies padding to a list of tokenized lyrics so they all have the same length.
@@ -171,4 +254,3 @@ def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
         padded_dataset.append(padded_lyrics)
         
     return padded_dataset
-
