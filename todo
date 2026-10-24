@@ -126,6 +126,15 @@ We will start with structural checks (shape, dtypes, nulls, duplicates), then mo
 
 ### Pre-processing 21/10/26 (Maiara)
 
-- [ ] filtrar dos artistas com 'Genius' no nome, quais é que são actual artists
+- [ ] filtrar dos artistas com 'Genius' no nome, quais é que são actual artists (acabamos por cagar nisto)
 - [ ] imputar os anos 
+
+
+### Pre-processing 24/10/26 (Maiara)
+- [x] corrigir os artistas
+- [x] corrigir os anos
+- [x] normalizar as lyrics
+- [ ] checkar os duplicates no train e no test mas tirar só no train porque não podemos eliminar os records do test por causa da competição
+- [ ] imputar os anos depois do split 
+- [ ] guardar os datasets como preprocessed
 
