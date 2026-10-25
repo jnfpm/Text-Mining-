@@ -1,11 +1,13 @@
 
 
 
+import re
+
 import pandas as pd
+from tools.utils import artist_from_title, get_info_batch, median_years
+
 
 #_____ BASE PREPROCESSING FUNCTIONS/ PIPELINE _____#
-
-
 
 ##Functions that fix inconsistencies
 
@@ -30,7 +32,6 @@ def fix_all_translation_artists(df):
     ]
 
     return result
-
 
 
 def correct_pre_years(treshold, data, split_name, suspicious_year_threshold=1800):
@@ -74,11 +75,127 @@ def correct_pre_years(treshold, data, split_name, suspicious_year_threshold=1800
           f"{suspicious.sum()} suspicious; {not_found.sum()} not found")
     return data, resolved_ids, suspicious_ids, not_found_ids
 
+## Duplicates
+
+def remove_duplicated_lyrics(x_train, y_train, x_test, y_test):
+    """Remove duplicate lyrics from train while leaving test unchanged.
+
+    Within a repeated train-lyrics group, prefer a title without version clues
+    such as ``remix``, ``cover``, ``instrumental`` or ``live``. When candidates
+    have the same title score, prefer the earliest known year, then the first
+    row. This is a metadata heuristic and cannot identify every original
+    recording reliably.
+
+    After within-train deduplication, remove train rows whose lyrics also occur
+    in test. Inputs and outputs retain their original row indexes and target
+    types; targets remain aligned with their feature rows.
+    """
+    for name, features, target in (
+        ('train', x_train, y_train),
+        ('test', x_test, y_test),
+    ):
+        if 'lyrics' not in features.columns:
+            raise ValueError(f"x_{name} must contain a 'lyrics' column.")
+        if len(features) != len(target):
+            raise ValueError(
+                f"x_{name} and y_{name} must have the same number of rows."
+            )
+
+    variant_cues = (
+        (re.compile(r'\b(?:cover|tribute|karaoke|instrumental)\b', re.I), 100),
+        (re.compile(r'\b(?:remix|re[\s-]?mix|remixed|nightcore|sped[\s-]?up|slowed(?:\s+down)?)\b', re.I), 90),
+        (re.compile(r'\b(?:live|acoustic|demo|alternate\s+take|re[\s-]?recorded|re[\s-]?recording)\b', re.I), 60),
+        (re.compile(r'\b(?:session|piano|orchestral)\s+version\b', re.I), 40),
+        (re.compile(r'\b(?:radio|clean|extended|club|dance)\s+(?:edit|mix|version)\b', re.I), 25),
+        (re.compile(r'\b(?:remaster(?:ed)?|edit|mix)\b', re.I), 10),
+    )
+
+    def lyric_key(value):
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def title_score(title):
+        title = title if isinstance(title, str) else ''
+        return sum(weight for pattern, weight in variant_cues if pattern.search(title))
+
+    train_groups = {}
+    for position, lyric in enumerate(x_train['lyrics'].tolist()):
+        key = lyric_key(lyric)
+        if key is not None:
+            train_groups.setdefault(key, []).append(position)
+
+    keep_train = [True] * len(x_train)
+    years = (
+        pd.to_numeric(x_train['year'], errors='coerce').tolist()
+        if 'year' in x_train.columns
+        else [float('nan')] * len(x_train)
+    )
+
+    for positions in train_groups.values():
+        if len(positions) < 2:
+            continue
+
+        def retention_rank(position):
+            year = years[position]
+            return (
+                title_score(x_train.iloc[position].get('title')),
+                year if pd.notna(year) else float('inf'),
+                position,
+            )
+
+        retained_position = min(positions, key=retention_rank)
+        for position in positions:
+            if position != retained_position:
+                keep_train[position] = False
+
+    test_lyrics = {
+        key for key in (lyric_key(value) for value in x_test['lyrics'].tolist())
+        if key is not None
+    }
+    for position, lyric in enumerate(x_train['lyrics'].tolist()):
+        if keep_train[position] and lyric_key(lyric) in test_lyrics:
+            keep_train[position] = False
+
+    retained_positions = [
+        position for position, keep in enumerate(keep_train) if keep
+    ]
+    return (
+        x_train.iloc[retained_positions].copy(),
+        y_train.iloc[retained_positions].copy(),
+        x_test.copy(),
+        y_test.copy(),
+    )
+
+##Filling in Nan
+
+def imputing_years(dataset, training_dataset):
+    """Impute missing years using training artist medians and an overall fallback.
+
+    Missing or unknown artist medians fall back to the overall median year from
+    ``training_dataset``. If training data contains no usable years, unresolved
+    values remain missing. The input dataset is not modified.
+    """
+    required_columns = {'artist', 'year'}
+    missing_columns = required_columns.difference(dataset.columns)
+    if missing_columns:
+        raise ValueError(
+            f"dataset must contain columns: {', '.join(sorted(missing_columns))}."
+        )
+
+    artist_medians = median_years(training_dataset)
+    training_years = pd.to_numeric(training_dataset['year'], errors='coerce')
+    overall_median = training_years.median()
+
+    result = dataset.copy()
+    artists = result['artist'].astype('string').str.strip().replace('', pd.NA)
+    years = pd.to_numeric(result['year'], errors='coerce')
+
+    artist_imputations = artists.map(artist_medians)
+    result['year'] = years.fillna(artist_imputations).fillna(overall_median)
+    return result
 
 
 #_____ PREPROCESSING FOR GENRE CLASSIFICATION _____#
 
-import re
 import os
 import time
 import nltk

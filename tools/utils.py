@@ -22,6 +22,11 @@ def get_song_info(song_id):
     Faz uma chamada(request) à API, dá o id da música e recebe(get) o id, o titulo, o artista, e a data de acordo 
     com a base de dados do Genius
     '''
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+    token = os.getenv('GENIUS_API_KEY')
+    if not token:
+        raise RuntimeError('GENIUS_API_KEY is not configured in the environment or .env file.')
+
     r = requests.get(f'https://api.genius.com/songs/{song_id}', #site do genius para fazer calls a API
                      headers={'Authorization': f'Bearer {token}'}, timeout=20) #usa a API key no .env para ser auturizado a fazer a call
     
@@ -104,6 +109,109 @@ def summarize_years(frame, ids, split, status):
     }
 
 
+def median_years(training_dataset):
+    """Return the median numeric release year for each artist in training data."""
+    required_columns = {'artist', 'year'}
+    missing_columns = required_columns.difference(training_dataset.columns)
+    if missing_columns:
+        raise ValueError(
+            f"training_dataset must contain columns: {', '.join(sorted(missing_columns))}."
+        )
+
+    artists = training_dataset['artist'].astype('string').str.strip()
+    artists = artists.replace('', pd.NA)
+    years = pd.to_numeric(training_dataset['year'], errors='coerce')
+    valid_rows = artists.notna() & years.notna()
+
+    return years.loc[valid_rows].groupby(artists.loc[valid_rows]).median().rename(
+        'median_year'
+    )
+
+
+def checking_duplicates(
+    dataset1,
+    dataset2,
+    dataset1_name='dataset1',
+    dataset2_name='dataset2',
+    lyrics_column='lyrics',
+):
+    """Report repeated lyrics in each dataset and exact matches between them.
+
+    Missing and whitespace-only lyrics are excluded. The returned
+    ``within_dataset`` frames contain each duplicated row's ID (when present)
+    and lyrics; ``shared_rows`` contains matching IDs and lyrics from both
+    datasets.
+    """
+    for dataset, name in ((dataset1, dataset1_name), (dataset2, dataset2_name)):
+        if lyrics_column not in dataset.columns:
+            raise ValueError(
+                f"{name} must contain a {lyrics_column!r} column to check duplicates."
+            )
+
+    def usable_lyrics(dataset):
+        lyrics = dataset[lyrics_column]
+        return lyrics.notna() & lyrics.astype('string').str.strip().ne('')
+
+    def duplicate_rows(dataset, usable):
+        return dataset.loc[
+            usable & dataset[lyrics_column].duplicated(keep=False),
+            [column for column in ('id', lyrics_column) if column in dataset.columns],
+        ].copy()
+
+    usable1 = usable_lyrics(dataset1)
+    usable2 = usable_lyrics(dataset2)
+    duplicates1 = duplicate_rows(dataset1, usable1)
+    duplicates2 = duplicate_rows(dataset2, usable2)
+    duplicate_lyrics1 = int(duplicates1[lyrics_column].nunique())
+    duplicate_lyrics2 = int(duplicates2[lyrics_column].nunique())
+
+    matches1 = dataset1.loc[usable1, [lyrics_column]].copy()
+    matches1['_row1'] = dataset1.index[usable1]
+    matches2 = dataset2.loc[usable2, [lyrics_column]].copy()
+    matches2['_row2'] = dataset2.index[usable2]
+    if 'id' in dataset1.columns:
+        matches1[f'{dataset1_name}_id'] = dataset1.loc[usable1, 'id'].to_numpy()
+    if 'id' in dataset2.columns:
+        matches2[f'{dataset2_name}_id'] = dataset2.loc[usable2, 'id'].to_numpy()
+
+    shared_rows = matches1.merge(
+        matches2,
+        on=lyrics_column,
+        how='inner',
+        suffixes=(f'_{dataset1_name}', f'_{dataset2_name}'),
+    )
+
+    summary = pd.DataFrame([
+        {
+            'dataset': dataset1_name,
+            'rows_with_lyrics': int(usable1.sum()),
+            'unique_duplicate_lyrics': duplicate_lyrics1,
+            'duplicate_rows': int(duplicates1.shape[0]),
+        },
+        {
+            'dataset': dataset2_name,
+            'rows_with_lyrics': int(usable2.sum()),
+            'unique_duplicate_lyrics': duplicate_lyrics2,
+            'duplicate_rows': int(duplicates2.shape[0]),
+        },
+        {
+            'dataset': f'{dataset1_name} vs {dataset2_name}',
+            'rows_with_lyrics': None,
+            'unique_duplicate_lyrics': int(shared_rows[lyrics_column].nunique()),
+            'duplicate_rows': int(len(shared_rows)),
+        },
+    ])
+
+    return {
+        'summary': summary,
+        'within_dataset': {
+            dataset1_name: duplicates1,
+            dataset2_name: duplicates2,
+        },
+        'shared_rows': shared_rows,
+    }
+
+
 
 def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
     """
@@ -127,5 +235,3 @@ def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
         padded_dataset.append(padded_lyrics)
         
     return padded_dataset
-
-

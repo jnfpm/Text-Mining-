@@ -1,6 +1,6 @@
 """Reproduce the train.csv Unicode investigation without modifying the dataset.
 
-Run: python3 analyze_unicode.py --input data/train.csv --output reports
+Run from the project root: python -m tools.analyze_unicode --input data/train.csv --output reports
 The audit uses all rows, not a sample. Output contains aggregate metrics,
 character counts, short review examples and a diagnostic figure, not new lyrics.
 """
@@ -15,7 +15,7 @@ import unicodedata
 
 import pandas as pd
 
-from text_quality import LATIN8_CHARACTERS, audit_lyrics, normalize_lyrics
+from tools.text_quality import LATIN8_CHARACTERS, audit_lyrics, normalize_lyrics
 
 
 def latin8_mask(lyrics):
