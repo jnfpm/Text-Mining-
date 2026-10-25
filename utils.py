@@ -1,70 +1,22 @@
-#File used to store relevant functions that we may need
+# file used to store relevant functions that we may need
+# In a notebook, install dependencies with:
+#!pip install pandas requests python-dotenv unidecode nltk
+# and then:
+# import nltk
+# nltk.download('punkt')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
+
 import re
+import os
+import time
 import nltk
 import pandas as pd
 import requests
-import os
 from dotenv import load_dotenv
-import unicodedata
-from text_quality import audit_lyrics, normalize_lyrics
+from unidecode import unidecode
 from nltk.tokenize.treebank import TreebankWordDetokenizer
-import time
 
-load_dotenv(override=True)   # override=True: re-read .env even if the variable was already loaded earlier in this kernel
-token = os.getenv('GENIUS_API_KEY')
-
-#Basic functions that will probably be needed to clean/preprocess the Lyrics
-
-def removing_stopwords(lyrics):
-    '''Remove stopwords from the lyrics'''
-    stopwords = nltk.corpus.stopwords.words('english') #defines a list of stopwords in english
-    lyrics = [word for word in lyrics if word not in stopwords]
-    return lyrics
-
-def clean_lyrics(lyrics):
-    '''Prepare Unicode lyrics for word models; keep accents and contractions.
-
-    Bracketed section labels are removed. Parenthetical sung words remain.
-    Punctuation becomes a boundary so "love/hate" does not become "lovehate".
-    For a typography-only copy preserving case/structure, use normalize_lyrics.
-    '''
-    lyrics = normalize_lyrics(lyrics, preserve_lines=False)
-    if not isinstance(lyrics, str):
-        return lyrics
-    lyrics = re.sub(r'\[.*?\]', ' ', lyrics)
-    lyrics = lyrics.lower()
-    lyrics = ''.join(
-        c if c.isalnum() or c.isspace() or c in "'\u200c\u200d" or unicodedata.category(c).startswith('M')
-        else ' ' for c in lyrics
-    )
-    return re.sub(r'\s+', ' ', lyrics).strip()
-
-def tokenize_lyrics(lyrics):
-    '''Tokenize Unicode lyrics and expand only unambiguous contraction tokens.'''
-    tokenized_text = nltk.tokenize.word_tokenize(clean_lyrics(lyrics)) #separate the lyrics into tokens
-    # 's can mean a possessive, "is", or "has"; preserve that ambiguity.
-    contractions = {"'m": "am", "n't": "not"}
-    return [contractions.get(token, token) for token in tokenized_text]
-
-#turning tokens into lemmas (using literally the function from class notebooks)
-def lemmatize_all(token, list_pos=["n","v","a","r","s"]):
-    """Apply WordNet lemmatization for each requested part-of-speech tag.
-
-    Inputs are one token and an ordered list of WordNet POS tags. The function
-    repeatedly updates the token with each lemmatization pass and returns the
-    final lemma.
-    """
-    wordnet_lem = nltk.stem.WordNetLemmatizer() 
-
-    return [wordnet_lem.lemmatize(token, arg_1) for arg_1 in list_pos] #only difference: comprehension instead of for loop, but same result
-
-#in case we need steemming instead of lemmatization
-def stemming_all(token):
-    """Apply Porter stemming to a token."""
-    porter_stemmer = nltk.stem.PorterStemmer()
-    return [[porter_stemmer.stem(token) for token in token]]
-
-# chamada a API do genius que retorna os atributos da musica
 def get_song_info(song_id):
     '''
     Faz uma chamada(request) à API, dá o id da música e recebe(get) o id, o titulo, o artista, e a data de acordo 
@@ -91,7 +43,7 @@ def get_song_info(song_id):
         'artist': artist,
         'release_date': s.get('release_date'),
     }
-
+    
 def get_info_batch(ids : pd.DataFrame or list[int],title = False,artist = False,release_date = False) : 
     ''' 
     Recebe uma lista ou dataframe de song_id e transforma em um dataframe com os argumentos que queremos saídos do Genius
@@ -110,125 +62,70 @@ def get_info_batch(ids : pd.DataFrame or list[int],title = False,artist = False,
 
     wanted = [name for name, keep in [('title', title), ('artist', artist), ('release_date', release_date)] if keep]
     return songs.reindex(columns=wanted)
-    
-    #songs = pd.DataFrame([get_song_info(i) for i in id]).set_index('id')
-    
-    # boolean mask apenas mete no daframe final os argumentos que são true
-    #filtered_songs = songs.loc[:,[title,artist,release_date]]
-    #print(filtered_songs)
-
 
 def artist_from_title(title):
-    t = re.sub(r'\s*english\s+translation\s*$', '', title, flags=re.I)
+    # Strip common translation suffixes before trying to extract the artist
+    t = re.sub(
+        r'\s*(english\s+)?translations?\s*$'
+        r'|\s*traduc\w*\s*$'           # Spanish/Portuguese: traducción, tradução
+        r'|\s*traduction\s*$'          # French
+        r'|\s*\(.*?translat\w*\)\s*$', # e.g. "(Official English Translation)"
+        '', title, flags=re.I
+    )
     parts = re.split(r'\s[-–—]\s', t, maxsplit=1)
     return parts[0].strip() if len(parts) == 2 else None
 
 def fix_translation_artists(df):
     '''
-    Recebe um dataframe com as colunas id e title, já só com as de artista Genius English Translation 
-    e devolve um novo com o id,artista, correto
+    Recebe um dataframe com as colunas id e title, já só com as linhas cujo
+    artista é uma conta da plataforma Genius (e.g. "Genius English Translations",
+    "Rap Genius") e devolve um novo dataframe com id e o artista real extraído
+    do título. Devolve None quando o título não segue o formato "Artista - Título".
     '''
-    
     result = df[['id']].copy()
     result['artist'] = df['title'].fillna('').map(artist_from_title)
 
     return result
 
-def normalize_lyrics_unicode(
-    text,
-    *,
-    repair_mixed_script=False,
-    preserve_lines=True,
-):
-    """Normalize Unicode lyrics without removing accents or other languages."""
 
-    # Preserve missing values rather than turning them into the word "nan".
-    if not isinstance(text, str):
-        if pd.api.types.is_scalar(text) and pd.isna(text):
-            return text
-        raise TypeError("Expected a string or a missing value.")
+def summarize_years(frame, ids, split, status):
+    years = pd.to_numeric(
+        frame.loc[frame['id'].isin(ids), 'year'],
+        errors='coerce'
+    ).dropna()
 
-    # Compose equivalent characters: e + combining accent becomes é.
-    text = ud.normalize("NFC", text)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-
-    # Recover recognizable Windows-1252 punctuation stored as control codes.
-    def recover_control(match):
-        char = match.group()
-        if char == "\x85":
-            return "\n"  # Unicode NEXT LINE; legacy ellipsis usage is ambiguous.
-        try:
-            return bytes([ord(char)]).decode("cp1252")
-        except UnicodeDecodeError:
-            return " "
-
-    text = re.sub(r"[\x80-\x9f]", recover_control, text)
-
-    # Remove zero-width scraping artifacts inside Latin words.
-    # Example: "T\u200bhe" -> "The".
-    def remove_inside_word(match):
-        left = match.group(1)
-        right = match.string[match.end()]
-        if all("LATIN" in ud.name(c, "") for c in (left, right)):
-            return left
-        return left + " "
-
-    text = re.sub(
-        r"([^\W\d_])\u200b(?=[^\W\d_])",
-        remove_inside_word,
-        text,
-    )
-
-    replacements = {
-        "‘": "'", "’": "'", "‚": "'", "‛": "'",
-        "“": '"', "”": '"', "„": '"', "‟": '"',
-        "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-",
-        "…": "...",
-        "\u200b": " ",   # Zero-width space outside Latin words.
-        "\ufeff": "",    # Embedded byte-order mark.
-        "\u00ad": "",    # Discretionary soft hyphen.
-        "\u2060": "",    # Word joiner.
+    return {
+        'split': split,
+        'status': status,
+        'rows_with_year': len(years),
+        'minimum_year': years.min() if not years.empty else None,
+        'years_below_1900': int((years < 1900).sum()),
+        'maximum_year': years.max() if not years.empty else None,
     }
 
-    # Remove directional formatting marks, preserving linguistic ZWJ/ZWNJ.
-    directional_marks = (
-        0x200E, 0x200F,
-        *range(0x202A, 0x202F),
-        *range(0x2066, 0x206A),
-    )
-    replacements.update({chr(cp): "" for cp in directional_marks})
-    text = text.translate(str.maketrans(replacements))
 
-    # Optional correction for the corpus-specific Cyrillic е/Е artifact.
-    if repair_mixed_script and ("е" in text or "Е" in text):
-        letters = [c for c in text if c.isalpha()]
-        latin_count = sum("LATIN" in ud.name(c, "") for c in letters)
 
-        if latin_count >= 0.9 * len(letters):
-            def repair_word(match):
-                word = match.group()
-                latin = sum("LATIN" in ud.name(c, "") for c in word)
-                allowed = all(
-                    "LATIN" in ud.name(c, "") or c in "еЕ"
-                    for c in word
-                )
+def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
+    """
+    Applies padding to a list of tokenized lyrics so they all have the same length.
+    """
+    # 1. If no len is provided, automatically find the length of the longest song
+    if max_len is None:
+        max_len = max(len(lyrics) for lyrics in tokenized_lyrics_list)
+    
+    padded_dataset = []
+    
+    for lyrics in tokenized_lyrics_list:
+        if len(lyrics) < max_len:
+            # If the song is shorter, append the padding_token at the END (Post-padding)
+            num_padding_needed = max_len - len(lyrics)
+            padded_lyrics = lyrics + [padding_token] * num_padding_needed
+        else:
+            # If the song is longer than max_len, truncate it
+            padded_lyrics = lyrics[:max_len]
+            
+        padded_dataset.append(padded_lyrics)
+        
+    return padded_dataset
 
-                if latin and latin * 2 >= len(word) and allowed:
-                    return word.translate(str.maketrans({"е": "e", "Е": "E"}))
-                return word
 
-            text = re.sub(r"[^\W\d_]+", repair_word, text)
-
-    # Standardize spaces and line endings without joining separate words.
-    spacing = {}
-    for char in set(text):
-        if char in "\n\u2028\u2029":
-            spacing[ord(char)] = "\n" if preserve_lines else " "
-        elif char.isspace() or ud.category(char) == "Cc" or char == "\ufffc":
-            spacing[ord(char)] = " "
-
-    text = text.translate(spacing)
-    text = re.sub(r" +", " ", text)
-    text = re.sub(r" *\n *", "\n", text)
-
-    return ud.normalize("NFC", text.strip())

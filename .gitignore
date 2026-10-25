@@ -1,6 +1,6 @@
 # Environment variables - never commit secrets
 .env
-.env.*.local
+
 
 # Virtual environment
 text_mining_project/

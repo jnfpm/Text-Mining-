@@ -41,7 +41,7 @@ _C1[0x85] = "\n"
 
 @lru_cache(maxsize=8192)
 def character_kind(char):
-    """Return a diagnostic bucket using Unicode names/categories, not language."""
+    """ Categorizes a character by its Unicode type, such as Latin letter, punctuation, symbol, or whitespace."""
     category = ud.category(char)
     if char in "\ufffd\ufffc":
         return "replacement_or_object"
@@ -59,6 +59,7 @@ def character_kind(char):
 
 
 def _repair_mixed_word(match):
+    "Converts Cyrillic “е” to Latin “e” in qualifying mostly-Latin words"
     word = match.group()
     if "е" not in word and "Е" not in word:
         return word
