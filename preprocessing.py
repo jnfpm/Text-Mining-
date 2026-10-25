@@ -1,7 +1,14 @@
+import re
 
-
-
+import nltk
+import numpy as np
 import pandas as pd
+from gensim.models import Word2Vec
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_is_fitted
+
+from text_quality import normalize_lyrics
+from utils import artist_from_title, get_info_batch
 
 #_____ BASE PREPROCESSING FUNCTIONS/ PIPELINE _____#
 
@@ -78,30 +85,14 @@ def correct_pre_years(treshold, data, split_name, suspicious_year_threshold=1800
 
 #_____ PREPROCESSING FOR GENRE CLASSIFICATION _____#
 
-import re
-import os
-import time
-import nltk
-import pandas as pd
-import requests
-from dotenv import load_dotenv
-from unidecode import unidecode
-from nltk.tokenize.treebank import TreebankWordDetokenizer
-
 def ensure_nltk_data():
     """Download the corpora used by the text-preprocessing functions if missing."""
-    required = ['punkt', 'stopwords', 'wordnet']
-    for resource in required:
+    required = {'corpora/stopwords': 'stopwords', 'corpora/wordnet': 'wordnet'}
+    for resource, package in required.items():
         try:
             nltk.data.find(resource)
         except LookupError:
-            nltk.download(resource)
-
-
-ensure_nltk_data()
-
-load_dotenv(override=True)   # override=True: re-read .env even if the variable was already loaded earlier in this kernel
-token = os.getenv('GENIUS_API_KEY')
+            nltk.download(package)
 
 # basic functions that will probably be needed to clean/preprocess the Lyrics
 
@@ -112,24 +103,61 @@ def removing_stopwords(lyrics):
     return lyrics
 
 def clean_lyrics(lyrics):
-    '''Remove unwanted characters and patterns from the lyrics
-    Not removing words between parentheses because they usually represent choruses example: "I need you (need you)".'''
-    
-    lyrics = unidecode(lyrics)  # Convert to ASCII (basically takes accentuation)
-    lyrics = re.sub(r'\[.*?\]', '', lyrics)  # Remove text within brackets
-    lyrics = lyrics.lower() #ower case all the lyrics
-    lyrics = re.sub(r'[^a-zA-Z0-9\s]', '', lyrics)  # Remove special characters
-    lyrics = re.sub(r'\s+', ' ', lyrics)  # replace multiple spaces with a single space
-    return lyrics.strip()  # remove leading and trailing whitespace
+    """Normalize lyrics and remove section annotations, keeping Unicode words."""
+    lyrics = normalize_lyrics(lyrics)
+    if not isinstance(lyrics, str):
+        return ''
+    lyrics = re.sub(r'\[[^\]]*\]', ' ', lyrics)
+    lyrics = re.sub(r"[^\w\s']", ' ', lyrics.lower())
+    return re.sub(r'\s+', ' ', lyrics).strip()
 
 def tokenize_lyrics(lyrics):
-    '''Tokenize the lyrics and remove unwanted characters like abreviations and contractions'''
-    tokenized_text = nltk.tokenize.word_tokenize(clean_lyrics(lyrics)) #separate the lyrics into tokens
+    """Return lowercase word tokens, preserving contractions without downloads."""
+    return re.findall(r"[^\W_]+(?:'[^\W_]+)*", clean_lyrics(lyrics))
 
-    tokenized_text = [re.sub("'m","am",token) for token in tokenized_text]
-    tokenized_text = [re.sub("n't","not",token) for token in tokenized_text]
-    tokenized_text = [re.sub("'s","is",token) for token in tokenized_text]
-    return tokenized_text
+
+def tokenize_corpus(lyrics):
+    """Tokenize a collection of lyric strings."""
+    return [tokenize_lyrics(text) for text in lyrics]
+
+
+class MeanWord2Vec(TransformerMixin, BaseEstimator):
+    """Learn word embeddings and average known word vectors for each lyric."""
+
+    def __init__(self, vector_size=25, window=5, min_count=2, epochs=5,
+                 random_state=39):
+        self.vector_size = vector_size
+        self.window = window
+        self.min_count = min_count
+        self.epochs = epochs
+        self.random_state = random_state
+
+    def fit(self, X, y=None):
+        self.model_ = Word2Vec(
+            vector_size=self.vector_size, window=self.window,
+            min_count=self.min_count, epochs=self.epochs, sg=0,
+            workers=1, seed=self.random_state,
+        )
+        self.model_.build_vocab(X)
+        if not len(self.model_.wv):
+            raise ValueError('No words remain; provide more lyrics or lower min_count.')
+        self.model_.train(X, total_examples=self.model_.corpus_count,
+                          epochs=self.epochs)
+        return self
+
+    def transform(self, X):
+        check_is_fitted(self, 'model_')
+        vectors = np.zeros((len(X), self.vector_size), dtype=np.float32)
+        for i, tokens in enumerate(X):
+            known = [word for word in tokens if word in self.model_.wv]
+            if known:
+                vectors[i] = self.model_.wv[known].mean(axis=0)
+        return vectors
+
+
+def normalize_lyrics_inplace(frame):
+    """Apply the project's conservative normalization to a frame's lyrics."""
+    frame['lyrics'] = frame['lyrics'].map(normalize_lyrics)
 
 # turning tokens into lemmas (using literally the function from class notebooks)
 def lemmatize_all(token, list_pos=["n","v","a","r","s"]):
