@@ -143,4 +143,3 @@ We will start with structural checks (shape, dtypes, nulls, duplicates), then mo
 - [ ] uma especie de booleann mask onde podemos testar todas combina;oes possiveis de preprocessing para o modelo. meter todas fun;oes do utils e preprocessing numa pipeline onde podemos selecionar os argumentos como falsos ou verdaderios 
 - [ ] setup no CUDA para paralelizar o treino
 - [ ] fazer um modelo multilabel com anotações e embeddings
-

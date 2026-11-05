@@ -19,6 +19,9 @@ statsmodels
 # Text mining / NLP
 nltk
 vaderSentiment
+textblob
+langdetect
+nrclex
 gensim
 regex
 transformers

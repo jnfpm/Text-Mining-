@@ -10,7 +10,6 @@
 import re
 import os
 import time
-from pathlib import Path
 import nltk
 import pandas as pd
 import requests
@@ -23,10 +22,11 @@ def get_song_info(song_id):
     Faz uma chamada(request) à API, dá o id da música e recebe(get) o id, o titulo, o artista, e a data de acordo 
     com a base de dados do Genius
     '''
-    load_dotenv()
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
     token = os.getenv('GENIUS_API_KEY')
     if not token:
-        raise ValueError('Set GENIUS_API_KEY before requesting song metadata.')
+        raise RuntimeError('GENIUS_API_KEY is not configured in the environment or .env file.')
+
     r = requests.get(f'https://api.genius.com/songs/{song_id}', #site do genius para fazer calls a API
                      headers={'Authorization': f'Bearer {token}'}, timeout=20) #usa a API key no .env para ser auturizado a fazer a call
     
@@ -109,6 +109,109 @@ def summarize_years(frame, ids, split, status):
     }
 
 
+def median_years(training_dataset):
+    """Return the median numeric release year for each artist in training data."""
+    required_columns = {'artist', 'year'}
+    missing_columns = required_columns.difference(training_dataset.columns)
+    if missing_columns:
+        raise ValueError(
+            f"training_dataset must contain columns: {', '.join(sorted(missing_columns))}."
+        )
+
+    artists = training_dataset['artist'].astype('string').str.strip()
+    artists = artists.replace('', pd.NA)
+    years = pd.to_numeric(training_dataset['year'], errors='coerce')
+    valid_rows = artists.notna() & years.notna()
+
+    return years.loc[valid_rows].groupby(artists.loc[valid_rows]).median().rename(
+        'median_year'
+    )
+
+
+def checking_duplicates(
+    dataset1,
+    dataset2,
+    dataset1_name='dataset1',
+    dataset2_name='dataset2',
+    lyrics_column='lyrics',
+):
+    """Report repeated lyrics in each dataset and exact matches between them.
+
+    Missing and whitespace-only lyrics are excluded. The returned
+    ``within_dataset`` frames contain each duplicated row's ID (when present)
+    and lyrics; ``shared_rows`` contains matching IDs and lyrics from both
+    datasets.
+    """
+    for dataset, name in ((dataset1, dataset1_name), (dataset2, dataset2_name)):
+        if lyrics_column not in dataset.columns:
+            raise ValueError(
+                f"{name} must contain a {lyrics_column!r} column to check duplicates."
+            )
+
+    def usable_lyrics(dataset):
+        lyrics = dataset[lyrics_column]
+        return lyrics.notna() & lyrics.astype('string').str.strip().ne('')
+
+    def duplicate_rows(dataset, usable):
+        return dataset.loc[
+            usable & dataset[lyrics_column].duplicated(keep=False),
+            [column for column in ('id', lyrics_column) if column in dataset.columns],
+        ].copy()
+
+    usable1 = usable_lyrics(dataset1)
+    usable2 = usable_lyrics(dataset2)
+    duplicates1 = duplicate_rows(dataset1, usable1)
+    duplicates2 = duplicate_rows(dataset2, usable2)
+    duplicate_lyrics1 = int(duplicates1[lyrics_column].nunique())
+    duplicate_lyrics2 = int(duplicates2[lyrics_column].nunique())
+
+    matches1 = dataset1.loc[usable1, [lyrics_column]].copy()
+    matches1['_row1'] = dataset1.index[usable1]
+    matches2 = dataset2.loc[usable2, [lyrics_column]].copy()
+    matches2['_row2'] = dataset2.index[usable2]
+    if 'id' in dataset1.columns:
+        matches1[f'{dataset1_name}_id'] = dataset1.loc[usable1, 'id'].to_numpy()
+    if 'id' in dataset2.columns:
+        matches2[f'{dataset2_name}_id'] = dataset2.loc[usable2, 'id'].to_numpy()
+
+    shared_rows = matches1.merge(
+        matches2,
+        on=lyrics_column,
+        how='inner',
+        suffixes=(f'_{dataset1_name}', f'_{dataset2_name}'),
+    )
+
+    summary = pd.DataFrame([
+        {
+            'dataset': dataset1_name,
+            'rows_with_lyrics': int(usable1.sum()),
+            'unique_duplicate_lyrics': duplicate_lyrics1,
+            'duplicate_rows': int(duplicates1.shape[0]),
+        },
+        {
+            'dataset': dataset2_name,
+            'rows_with_lyrics': int(usable2.sum()),
+            'unique_duplicate_lyrics': duplicate_lyrics2,
+            'duplicate_rows': int(duplicates2.shape[0]),
+        },
+        {
+            'dataset': f'{dataset1_name} vs {dataset2_name}',
+            'rows_with_lyrics': None,
+            'unique_duplicate_lyrics': int(shared_rows[lyrics_column].nunique()),
+            'duplicate_rows': int(len(shared_rows)),
+        },
+    ])
+
+    return {
+        'summary': summary,
+        'within_dataset': {
+            dataset1_name: duplicates1,
+            dataset2_name: duplicates2,
+        },
+        'shared_rows': shared_rows,
+    }
+
+
 
 def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
     """
@@ -132,92 +235,3 @@ def padding_lyrics(tokenized_lyrics_list, max_len=None, padding_token="0"):
         padded_dataset.append(padded_lyrics)
         
     return padded_dataset
-
-
-def load_prediction_data(data_dir='data'):
-    """Load saved preprocessing outputs, restoring training labels by song ID."""
-    from text_quality import normalize_lyrics
-
-    data_dir = Path(data_dir)
-    candidates = [
-        (data_dir / 'processed/train.csv', data_dir / 'processed/test.csv'),
-        (data_dir / 'normalized_x_train.csv', data_dir / 'normalized_x_test.csv'),
-        (data_dir / 'train.csv', data_dir / 'test.csv'),
-    ]
-    for train_path, test_path in candidates:
-        if train_path.exists() or test_path.exists():
-            if not train_path.exists() or not test_path.exists():
-                missing = train_path if not train_path.exists() else test_path
-                raise FileNotFoundError(f'Missing matching dataset: {missing}')
-            break
-    else:
-        raise FileNotFoundError(f'No training/test CSV pair found in {data_dir}.')
-
-    train = pd.read_csv(train_path)
-    test = pd.read_csv(test_path)
-    for frame, path in [(train, train_path), (test, test_path)]:
-        missing = {'id', 'lyrics'} - set(frame.columns)
-        if missing:
-            raise ValueError(f'{path} is missing columns: {sorted(missing)}')
-        if frame['id'].isna().any() or frame['id'].duplicated().any():
-            raise ValueError(f'{path} must contain unique, non-missing song IDs.')
-
-    if 'tag' not in train.columns:
-        raw_path = data_dir / 'train.csv'
-        labels = pd.read_csv(raw_path, usecols=['id', 'tag'])
-        if labels['id'].isna().any() or labels['id'].duplicated().any():
-            raise ValueError(f'{raw_path} must contain unique, non-missing song IDs.')
-        train = train.merge(labels, on='id', how='left', sort=False,
-                            validate='one_to_one', indicator=True)
-        if train['_merge'].ne('both').any():
-            raise ValueError('Processed training data contains unknown song IDs.')
-        train = train.drop(columns='_merge')
-
-    if train['tag'].isna().any() or train['tag'].astype(str).str.strip().eq('').any():
-        raise ValueError('Training data contains missing genre labels.')
-
-    if train_path == data_dir / 'train.csv':
-        print('No saved preprocessing outputs found; normalizing raw lyrics. '
-              'Saved metadata corrections are unavailable; the model uses lyrics only.')
-        train['lyrics'] = train['lyrics'].map(normalize_lyrics)
-        test['lyrics'] = test['lyrics'].map(normalize_lyrics)
-    else:
-        print(f'Loaded preprocessed datasets: {train_path} and {test_path}')
-    return train, test
-
-
-def check_for_duplicates(dataset1, dataset2, dataset1_name='train', dataset2_name='test'):
-    """Audit exact non-empty normalized lyrics without changing either dataset."""
-    from text_quality import normalize_lyrics
-
-    frames = []
-    summaries = []
-    for name, dataset in [(dataset1_name, dataset1), (dataset2_name, dataset2)]:
-        lyrics = dataset['lyrics'].map(normalize_lyrics)
-        usable = lyrics.map(lambda text: isinstance(text, str) and bool(text.strip()))
-        frame = dataset.loc[usable].copy()
-        frame['lyrics'] = lyrics.loc[usable]
-        counts = frame['lyrics'].value_counts()
-        repeated = counts[counts > 1]
-        conflicts = (frame.groupby('lyrics')['tag'].nunique().gt(1).sum()
-                     if 'tag' in frame.columns else None)
-        summaries.append({
-            'dataset': name,
-            'rows': len(dataset),
-            'non_empty_lyrics': len(frame),
-            'duplicate_lyric_groups': len(repeated),
-            'duplicate_extra_rows': int((repeated - 1).sum()),
-            'conflicting_genre_groups': conflicts,
-        })
-        frames.append(frame)
-
-    shared = set(frames[0]['lyrics']) & set(frames[1]['lyrics'])
-    for summary, frame in zip(summaries, frames):
-        summary['shared_lyric_groups'] = len(shared)
-        summary['shared_rows'] = int(frame['lyrics'].isin(shared).sum())
-    shared_rows = pd.concat([
-        frame.loc[frame['lyrics'].isin(shared)].assign(dataset=name)
-        for name, frame in zip([dataset1_name, dataset2_name], frames)
-    ], ignore_index=True)
-    return {'summary': pd.DataFrame(summaries), 'shared_rows': shared_rows}
-
