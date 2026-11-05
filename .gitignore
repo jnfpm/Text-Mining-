@@ -16,3 +16,11 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+.Rhistory
+.RData
+.Ruserdata
+data/predictions*.csv
+reports/runs/
+*.keras
+*.joblib

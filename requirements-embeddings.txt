@@ -1,0 +1,2 @@
+-r requirements-models.txt
+gensim>=4.4,<5
