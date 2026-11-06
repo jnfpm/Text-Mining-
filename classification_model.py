@@ -61,11 +61,12 @@ class ClassificationModel:
         )
         features = self.model.build_features()
         classifier = self.model.build_classifier()
-        raise NotImplementedError(
-            'Exercise 2: assemble preprocessing, text, features and classifier '
-            'into TrainingPipeline, using those exact step names and '
-            'self.remove_duplicates.'
-        )
+        return TrainingPipeline([
+            ('preprocessing', preprocessing),
+            ('text', text),
+            ('features', features),
+            ('classifier', classifier),
+        ], remove_duplicates=self.remove_duplicates)
 
     def run(self, data_dir='data', output_path='data/predictions.csv',
             grid_search=False, sample_size=None, report_dir='reports/runs'):

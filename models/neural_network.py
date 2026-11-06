@@ -25,10 +25,19 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
         self.verbose = verbose
 
     def build_network(self, vectorizer, class_count):
-        raise NotImplementedError(
-            'Exercise3: build the text-vectorization, embedding, pooling, '
-            'dense, dropout, and softmax network in build_network().'
-        )
+        import tensorflow as tf
+ 
+        inputs = tf.keras.Input(shape=(), dtype=tf.string)
+        x = vectorizer(inputs)
+        x = tf.keras.layers.Embedding(
+            input_dim=vectorizer.vocabulary_size(),
+            output_dim=self.embedding_dim, mask_zero=True,
+        )(x)
+        x = tf.keras.layers.GlobalAveragePooling1D()(x)
+        x = tf.keras.layers.Dense(self.dense_units, activation='relu')(x)
+        x = tf.keras.layers.Dropout(self.dropout)(x)
+        outputs = tf.keras.layers.Dense(class_count, activation='softmax')(x)
+        return tf.keras.Model(inputs, outputs)
 
     def _select_device(self, tf):
         if self.device not in {'auto', 'cpu', 'gpu'}:

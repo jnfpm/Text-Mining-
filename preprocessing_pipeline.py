@@ -72,10 +72,10 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
         ]
 
     def clean_text(self, text):
-        raise NotImplementedError(
-            'Exercise 1: apply the enabled functions from self.operations() '
-            'in order and return the resulting text.'
-        )
+        for enabled, operation in self.operations():
+            if enabled:
+                text = operation(text)
+        return text
 
     def fit(self, X, y=None):
         return self
