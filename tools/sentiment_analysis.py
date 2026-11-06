@@ -14,13 +14,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import cohen_kappa_score
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-
+from scipy.stats import pearsonr
+from sklearn.feature_extraction.text import CountVectorizer
+from vaderSentiment.vaderSentiment import normalize
+from wordcloud import WordCloud
 
 RANDOM_STATE = 42
 LANGUAGE_CONFIDENCE = 0.80
 PRIMARY_COLOR = "#4166c4"
 SECONDARY_COLOR = "#597edb"
 SENTIMENT_ORDER = ["Negative", "Neutral", "Positive"]
+WORD_ANALYZER = SentimentIntensityAnalyzer()
 EMOTION_NAMES = [
     "anger",
     "anticipation",
@@ -465,6 +469,7 @@ def plot_sentiment_distribution(distribution):
     plt.show()
 
 
+
 def plot_genre_sentiment(genre_summary):
     """Plot mean song-level VADER sentiment by genre."""
     sns.barplot(
@@ -531,5 +536,150 @@ def plot_subjectivity(df_song_primary):
     plt.title("Song-level TextBlob subjectivity")
     plt.xlabel("Mean line subjectivity")
     plt.ylabel("Number of songs")
+    plt.tight_layout()
+    plt.show()
+
+    ## Vocabulary Exploration
+
+def summarize_vocabulary(df_sample, top_n=20):   
+    #Count frequent words...                   
+    vectorizer = CountVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+        token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z']+\b",
+    )
+    counts = np.asarray(
+        vectorizer.fit_transform(df_sample["lyrics_clean"]).sum(axis=0)
+    ).ravel()
+    frequencies = dict(zip(vectorizer.get_feature_names_out(), counts))
+    return frequencies, pd.Series(frequencies).nlargest(top_n)
+
+
+def plot_vocabulary(frequencies, top_terms):
+    """Plot a word cloud next to the most frequent terms."""
+    cloud = WordCloud(
+        background_color="white", max_words=120, width=700, height=400,
+        random_state=RANDOM_STATE,
+    ).generate_from_frequencies(frequencies)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+    axes[0].imshow(cloud, interpolation="bilinear")
+    axes[0].axis("off")
+    sns.barplot(x=top_terms.values, y=top_terms.index, color=SECONDARY_COLOR, ax=axes[1])
+    axes[1].set_xlabel("Frequency")
+    fig.suptitle("Most frequent lyric words and phrases", color=SECONDARY_COLOR)
+    plt.tight_layout()
+    plt.show()
+
+def vader_normalize(valence_sum):
+    """VADER's compound normalisation: s / sqrt(s^2 + 15)."""
+    return valence_sum / np.sqrt(valence_sum ** 2 + 15)
+
+
+def lexicon_only_compound(text, analyzer):
+    """Sum lexicon valences only, ignoring VADER's context rules."""
+    tokens = re.findall(r"\b\w+\b", text.lower())
+    total = sum(analyzer.lexicon.get(token, 0.0) for token in tokens)
+    return round(vader_normalize(total), 4)
+
+
+def mean_assessment_polarity(assessments):
+    """TextBlob's polarity: the mean polarity of its assessed phrases."""
+    return float(np.mean([a[1] for a in assessments])) if assessments else 0.0
+
+
+def explain_scoring_rules():
+    """Return tables showing how VADER and TextBlob build their scores."""
+    analyzer = SentimentIntensityAnalyzer()
+    for total in (-5.0, 0.0, 5.0):
+        assert np.isclose(vader_normalize(total), normalize(total))
+
+    cues = [
+        "I love this song.",
+        "I do not love this song.",
+        "I really love this song.",
+        "I LOVE this song!!!",
+    ]
+    vader_table = pd.DataFrame(
+        [analyzer.polarity_scores(text) for text in cues], index=cues
+    )
+    vader_table["lexicon_only"] = [lexicon_only_compound(t, analyzer) for t in cues]
+
+    rows = []
+    for text in ["good", "not good", "The beat was good but the lyrics were bad.", "table chair"]:
+        blob = TextBlob(text)
+        assessments = blob.sentiment_assessments.assessments
+        assert np.isclose(mean_assessment_polarity(assessments), blob.sentiment.polarity)
+        rows.append({
+            "text": text,
+            "assessments": assessments,
+            "textblob_polarity": blob.sentiment.polarity,
+        })
+    return vader_table, pd.DataFrame(rows)
+
+def score_whole_songs(df_sample, df_song_primary):
+    """Score each deduplicated song as one text, beside its line-mean score."""
+    analyzer = SentimentIntensityAnalyzer()
+    texts = df_sample.set_index("song_key")["lyrics_clean"].map(
+        lambda text: "\n".join(get_lyric_lines(text, deduplicate=True))
+    )
+    whole = pd.DataFrame({
+        "vader_whole": texts.map(lambda t: analyzer.polarity_scores(t)["compound"]),
+        "textblob_whole": texts.map(lambda t: TextBlob(t).sentiment.polarity),
+    })
+    return df_song_primary.merge(whole, left_on="song_key", right_index=True)
+
+
+def summarize_aggregation(df_whole):
+    """Compare whole-song scores with the mean of line scores."""
+    pairs = {
+        "VADER": ("vader_compound", "vader_whole"),
+        "TextBlob": ("textblob_polarity", "textblob_whole"),
+    }
+    return pd.DataFrame({
+        tool: {
+            "pearson_r": pearsonr(df_whole[line], df_whole[whole]).statistic,
+            "mean_abs_difference": (df_whole[line] - df_whole[whole]).abs().mean(),
+        }
+        for tool, (line, whole) in pairs.items()
+    }).T
+
+def top_disagreements(df_song_primary, df_sample, n=3):
+    """Return the songs where VADER and TextBlob differ most, with lyrics."""
+    gap = (df_song_primary["vader_compound"] - df_song_primary["textblob_polarity"]).abs()
+    top = df_song_primary.loc[
+        gap.nlargest(n).index,
+        ["song_key", "title", "artist", "vader_compound", "textblob_polarity"],
+    ]
+    return top.merge(df_sample[["song_key", "lyrics_clean"]], on="song_key")
+
+def sentiment_color(word, *args, **kwargs):
+    """Colour a word by the sign of its isolated VADER score."""
+    polarity = WORD_ANALYZER.polarity_scores(word)["compound"]
+    return "blue" if polarity > 0 else "red" if polarity < 0 else "grey"
+
+
+def plot_genre_clouds(df_sample, max_words=50):
+    """Show each genre's most distinctive words (TF-IDF), coloured by word sentiment."""
+    genres = sorted(df_sample["tag"].unique())
+    texts = [" ".join(df_sample.loc[df_sample["tag"].eq(g), "lyrics_clean"]) for g in genres]
+    vectorizer = TfidfVectorizer(stop_words="english", token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z']+\b")
+    tfidf = vectorizer.fit_transform(texts)
+    terms = vectorizer.get_feature_names_out()
+
+    columns = min(3, len(genres))
+    rows = int(np.ceil(len(genres) / columns))
+    fig, axes = plt.subplots(rows, columns, figsize=(6 * columns, 5 * rows), squeeze=False)
+    for ax in axes.ravel():
+        ax.axis("off")
+    for i, genre in enumerate(genres):
+        weights = tfidf.getrow(i).toarray().ravel()
+        frequencies = dict(zip(terms[weights > 0], weights[weights > 0]))
+        cloud = WordCloud(
+            background_color="white", max_words=max_words, width=500, height=400,
+            random_state=RANDOM_STATE, color_func=sentiment_color,
+        ).generate_from_frequencies(frequencies)
+        ax = axes.ravel()[i]
+        ax.imshow(cloud, interpolation="bilinear")
+        ax.set_title(genre)
     plt.tight_layout()
     plt.show()
