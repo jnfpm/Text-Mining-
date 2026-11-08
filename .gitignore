@@ -24,3 +24,6 @@ data/predictions*.csv
 reports/runs/
 *.keras
 *.joblib
+
+# Project virtualenv (CUDA PyTorch)
+.venv/

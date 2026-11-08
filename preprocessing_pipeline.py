@@ -1,4 +1,7 @@
+from collections import OrderedDict
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
+import os
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -12,6 +15,20 @@ from tools.lyric_cleaning import (
 )
 from tools.text_quality import normalize_lyrics
 
+# Which song attributes are fed to the model next to the lyrics.
+INPUT_FIELDS = {
+    'lyrics': (),
+    'lyrics_artist': ('artist',),
+    'lyrics_artist_year': ('artist', 'year'),
+    'all': ('title', 'artist', 'features', 'year'),
+}
+
+# Cleaned lyrics per cleaning configuration, so repeated fits in a search do
+# not redo the (slow) cleaning. Keeps the most recent configurations only.
+_CLEAN_CACHE = OrderedDict()
+_CLEAN_CACHE_SIZE = 8
+_PARALLEL_THRESHOLD = 2_000
+
 
 def flatten_lines(text):
     return ' '.join(text.split())
@@ -21,6 +38,25 @@ def select_processed_text(frame, column='lyrics_processed'):
     return frame[column]
 
 
+def _clean_chunk(cls, params, texts):
+    pipeline = cls(**params)
+    return [pipeline.clean_text(text) for text in texts]
+
+
+def _format_value(field, value):
+    if value is None or (pd.api.types.is_scalar(value) and pd.isna(value)):
+        return ''
+    if field == 'year':
+        try:
+            return str(int(float(value)))
+        except (TypeError, ValueError):
+            return ''
+    text = ' '.join(str(value).split())
+    if field == 'features':
+        text = text.strip('{}').replace('"', '').replace("'", '')
+    return text.strip()
+
+
 class PreprocessingPipeline(TransformerMixin, BaseEstimator):
     def __init__(self, normalize_unicode=True, repair_mixed_script=False,
                  remove_section_headers=False, remove_performer_names=True,
@@ -28,6 +64,7 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
                  remove_bracket_symbols=False, remove_sung_brackets=False,
                  remove_unbracketed_headers=True, remove_repeated_lines=False,
                  lowercase=True, strip_punctuation=False, preserve_lines=True,
+                 input_fields='lyrics', n_jobs=1,
                  text_column='lyrics', output_column='lyrics_processed'):
         self.normalize_unicode = normalize_unicode
         self.repair_mixed_script = repair_mixed_script
@@ -42,6 +79,8 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
         self.lowercase = lowercase
         self.strip_punctuation = strip_punctuation
         self.preserve_lines = preserve_lines
+        self.input_fields = input_fields
+        self.n_jobs = n_jobs
         self.text_column = text_column
         self.output_column = output_column
 
@@ -77,6 +116,63 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
                 text = operation(text)
         return text
 
+    def _cleaning_params(self):
+        excluded = {'input_fields', 'n_jobs', 'text_column', 'output_column'}
+        return {key: value for key, value in self.get_params().items()
+                if key not in excluded}
+
+    def _workers(self):
+        if self.n_jobs in (-1, None):
+            return os.cpu_count() or 1
+        return max(1, int(self.n_jobs))
+
+    def _clean_many(self, texts):
+        params = self._cleaning_params()
+        key = (type(self).__module__, type(self).__qualname__,
+               tuple(sorted(params.items())))
+        cache = _CLEAN_CACHE.setdefault(key, {})
+        _CLEAN_CACHE.move_to_end(key)
+        while len(_CLEAN_CACHE) > _CLEAN_CACHE_SIZE:
+            _CLEAN_CACHE.popitem(last=False)
+        missing = list(dict.fromkeys(text for text in texts if text not in cache))
+        workers = self._workers()
+        if workers > 1 and len(missing) >= _PARALLEL_THRESHOLD:
+            size = max(1, len(missing) // (workers * 4))
+            chunks = [missing[start:start + size] for start in range(0, len(missing), size)]
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                results = pool.map(_clean_chunk, [type(self)] * len(chunks),
+                                   [params] * len(chunks), chunks)
+                for chunk, cleaned in zip(chunks, results):
+                    cache.update(zip(chunk, cleaned))
+        else:
+            for text in missing:
+                cache[text] = self.clean_text(text)
+        return [cache[text] for text in texts]
+
+    def _metadata_prefix(self, frame):
+        if self.input_fields not in INPUT_FIELDS:
+            raise ValueError(f'input_fields must be one of {tuple(INPUT_FIELDS)}.')
+        fields = INPUT_FIELDS[self.input_fields]
+        missing = [field for field in fields if field not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"input_fields={self.input_fields!r} needs columns: {', '.join(missing)}")
+        if not fields:
+            return None
+        separator = '\n' if self.preserve_lines else ' '
+        prefixes = []
+        for values in zip(*(frame[field] for field in fields)):
+            parts = []
+            for field, value in zip(fields, values):
+                text = _format_value(field, value)
+                if text:
+                    parts.append(f'{field}: {text}')
+            prefix = ' | '.join(parts)
+            if self.lowercase:
+                prefix = prefix.lower()
+            prefixes.append(prefix + separator if prefix else '')
+        return prefixes
+
     def fit(self, X, y=None):
         return self
 
@@ -94,7 +190,11 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
         values = frame[self.text_column].fillna('')
         if not values.map(lambda value: isinstance(value, str)).all():
             raise TypeError('Lyrics must contain strings or missing values.')
-        frame[self.output_column] = values.map(self.clean_text)
+        prefixes = self._metadata_prefix(frame)
+        cleaned = self._clean_many(values.tolist())
+        if prefixes is not None:
+            cleaned = [prefix + text for prefix, text in zip(prefixes, cleaned)]
+        frame[self.output_column] = pd.Series(cleaned, index=frame.index, dtype=object)
         return frame
 
     def transform_tokens(self, X):

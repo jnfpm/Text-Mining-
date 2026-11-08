@@ -1,1 +1,15 @@
-tensorflow>=2.16,<2.22
+# Neural model (PyTorch + CUDA). Install into the project venv:
+#   uv venv --python 3.12 .venv
+#   uv pip install --python .venv\Scripts\python.exe torch --index-url https://download.pytorch.org/whl/cu128
+#   uv pip install --python .venv\Scripts\python.exe -r requirements-gpu.txt
+# (or: .venv\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu128)
+-r requirements-models.txt
+torch>=2.7
+transformers>=4.45
+skorch>=1.0
+nltk
+unidecode
+regex
+python-dotenv
+requests
+langdetect

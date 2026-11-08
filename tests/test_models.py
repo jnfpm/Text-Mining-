@@ -1,16 +1,14 @@
 from pathlib import Path
 import subprocess
 import sys
-from types import SimpleNamespace
 import unittest
-from unittest import mock
 
 import numpy as np
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 
 from models import get_model
-from models.neural_network import NeuralNetworkClassifier
+from models.neural_network import NeuralNetworkClassifier, class_weights, truncate_ids
 
 
 class ClassicalModelTests(unittest.TestCase):
@@ -54,7 +52,7 @@ import sys
 
 original_import = builtins.__import__
 def guarded_import(name, *args, **kwargs):
-    if name.split('.')[0] in {'tensorflow', 'keras', 'gensim'}:
+    if name.split('.')[0] in {'tensorflow', 'keras', 'gensim', 'torch', 'transformers', 'skorch'}:
         raise AssertionError('Optional engine imported: ' + name)
     return original_import(name, *args, **kwargs)
 builtins.__import__ = guarded_import
@@ -69,7 +67,7 @@ for name in ('tfidf', 'complement_nb', 'multinomial_nb', 'neural_network'):
     model.build_features()
     model.build_classifier()
 get_model('tfidf', representation='word2vec').build_features()
-assert not any(name.split('.')[0] in {'tensorflow', 'gensim'} for name in sys.modules)
+assert not any(name.split('.')[0] in {'tensorflow', 'gensim', 'torch', 'transformers', 'skorch'} for name in sys.modules)
 print('optional imports stayed lazy')
 """
         result = subprocess.run([sys.executable, '-c', script],
@@ -80,46 +78,41 @@ print('optional imports stayed lazy')
 
 
 class NeuralConfigurationTests(unittest.TestCase):
-    def fake_tensorflow(self, devices):
-        return SimpleNamespace(config=SimpleNamespace(
-            list_physical_devices=mock.Mock(return_value=devices),
-            experimental=SimpleNamespace(set_memory_growth=mock.Mock()),
-        ))
-
     def test_neural_configuration_is_cloneable_without_building_a_network(self):
-        model = get_model('neural_network', device='cpu', embedding_dim=32, epochs=2)
+        model = get_model('neural_network', device='cpu', max_length=128, max_epochs=2)
         classifier = clone(model.build_classifier())
         self.assertIsInstance(classifier, NeuralNetworkClassifier)
         self.assertEqual(classifier.device, 'cpu')
-        self.assertEqual(classifier.embedding_dim, 32)
-        self.assertEqual(classifier.epochs, 2)
-        self.assertFalse(hasattr(classifier, 'network_'))
+        self.assertEqual(classifier.max_length, 128)
+        self.assertEqual(classifier.max_epochs, 2)
+        self.assertFalse(hasattr(classifier, 'net_'))
         features = model.build_features()
         np.testing.assert_array_equal(features.transform(['café', 'мир']), ['café', 'мир'])
+        for parameter in model.parameter_grid():
+            self.assertIn(parameter, Pipeline([('classifier', classifier)]).get_params())
 
-    def test_cpu_mode_does_not_initialize_gpu_memory_growth(self):
-        tensorflow = self.fake_tensorflow(['fake-gpu'])
-        self.assertEqual(NeuralNetworkClassifier(device='cpu')._select_device(tensorflow), '/CPU:0')
-        tensorflow.config.experimental.set_memory_growth.assert_not_called()
+    def test_unknown_neural_parameter_fails_fast(self):
+        with self.assertRaises(TypeError):
+            get_model('neural_network', embedding_dim=32)
 
-    def test_auto_selects_available_gpu_and_enables_memory_growth(self):
-        tensorflow = self.fake_tensorflow(['gpu-one', 'gpu-two'])
-        self.assertEqual(NeuralNetworkClassifier(device='auto')._select_device(tensorflow), '/GPU:0')
-        self.assertEqual(tensorflow.config.experimental.set_memory_growth.call_args_list,
-                         [mock.call('gpu-one', True), mock.call('gpu-two', True)])
-
-    def test_gpu_request_requires_a_visible_device_and_auto_can_use_cpu(self):
-        tensorflow = self.fake_tensorflow([])
-        with self.assertRaises(RuntimeError):
-            NeuralNetworkClassifier(device='gpu')._select_device(tensorflow)
-        self.assertEqual(NeuralNetworkClassifier(device='auto')._select_device(tensorflow), '/CPU:0')
-
-    def test_existing_gpu_context_is_accepted_and_invalid_mode_is_rejected(self):
-        tensorflow = self.fake_tensorflow(['fake-gpu'])
-        tensorflow.config.experimental.set_memory_growth.side_effect = RuntimeError('already initialized')
-        self.assertEqual(NeuralNetworkClassifier(device='gpu')._select_device(tensorflow), '/GPU:0')
+    def test_head_tail_truncation_keeps_start_and_end(self):
+        ids = list(range(20))
+        self.assertEqual(truncate_ids(ids, 8, 'head'), list(range(8)))
+        self.assertEqual(truncate_ids(ids, 8, 'head_tail'), [0, 1, 14, 15, 16, 17, 18, 19])
+        self.assertEqual(truncate_ids(ids[:5], 8, 'head_tail'), ids[:5])
         with self.assertRaises(ValueError):
-            NeuralNetworkClassifier(device='invalid')._select_device(tensorflow)
+            truncate_ids(ids, 8, 'middle')
+
+    def test_class_weights_upweight_rare_classes(self):
+        encoded = np.array([0] * 90 + [1] * 10)
+        self.assertIsNone(class_weights(encoded, 2, None))
+        balanced = class_weights(encoded, 2, 'balanced')
+        sqrt = class_weights(encoded, 2, 'sqrt')
+        self.assertAlmostEqual(float(balanced.mean()), 1.0, places=5)
+        self.assertGreater(balanced[1], sqrt[1])
+        self.assertGreater(sqrt[1], sqrt[0])
+        with self.assertRaises(ValueError):
+            class_weights(encoded, 2, 'unknown')
 
 
 if __name__ == '__main__':
