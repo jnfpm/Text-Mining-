@@ -5,7 +5,7 @@
 Runs sklearn's HalvingRandomSearchCV over preprocessing + transformer settings
 (config.NEURAL_SEARCH / NEURAL_SEARCH_SPACE), refits the winner on the full
 training set and writes data/submission_neural.csv. Extra arguments are passed
-through, e.g. `--n-candidates 20` or `--scoring f1_macro`.
+through, e.g. `--sample-size 3000` for a quick test.
 """
 import os
 import sys
@@ -35,5 +35,4 @@ if __name__ == '__main__':
                  '(PyTorch CUDA build), not the system Python.')
     print(f'CUDA OK: {torch.cuda.get_device_name(0)} | torch {torch.__version__} '
           f'(CUDA {torch.version.cuda})', flush=True)
-    main(['--model', 'neural_network', '--train-neural', '--halving-search',
-          '--device', 'cuda', *sys.argv[1:]])
+    main(['--model', 'neural_network', '--halving-search', *sys.argv[1:]])

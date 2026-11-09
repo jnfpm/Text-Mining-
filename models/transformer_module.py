@@ -77,16 +77,3 @@ class TransformerModule(nn.Module):
             pooled = hidden[:, 0]
         return self.head(self.dropout(pooled))
 
-
-class LinearWarmupDecay:
-    """LambdaLR schedule: linear warmup, then linear decay to zero (picklable)."""
-
-    def __init__(self, warmup_steps, total_steps):
-        self.warmup_steps = warmup_steps
-        self.total_steps = total_steps
-
-    def __call__(self, step):
-        if step < self.warmup_steps:
-            return (step + 1) / max(1, self.warmup_steps)
-        remaining = self.total_steps - step
-        return max(0.0, remaining / max(1, self.total_steps - self.warmup_steps))

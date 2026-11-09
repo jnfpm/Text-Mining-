@@ -41,37 +41,21 @@ MODEL_PARAMETERS = {
         'min_df': 2,
         'alpha': 1.0,
     },
-    'neural_network': {
+    'neural_network': {         # used without --halving-search; other settings use the class defaults
         'model_name': 'distilroberta-base',
         'max_length': 256,
-        'truncation': 'head_tail',
-        'pooling': 'cls',
-        'dropout': 0.1,
         'learning_rate': 3e-5,
-        'weight_decay': 0.01,
-        'warmup_ratio': 0.06,
         'batch_size': 32,
         'max_epochs': 3,
-        'patience': 1,
-        'valid_fraction': 0.1,
-        'class_weight': 'sqrt',
-        'label_smoothing': 0.0,
-        'device': 'cuda',
     },
 }
 
-# ---------------------------------------------------------------------------
-# Neural search: sklearn HalvingRandomSearchCV over preprocessing + model.
-# Each candidate is sampled from ONE of the dicts below (first pick a dict,
-# then a value per key). roberta-base is limited to 256 tokens because at 512
-# it is ~4x slower than the distilled models (benchmarked on the A5000).
-# Early rounds train many candidates on few songs; only the best survive to
-# train on the full split (factor 3 per round).
-# ---------------------------------------------------------------------------
+# Neural search (run_gpu.py): 40 random candidates, the best third survive each
+# round and train on 3x more songs. Took 4.7 h on the RTX A5000.
 NEURAL_SEARCH = {
-    'n_candidates': 40,         # ~6 h on the RTX A5000 incl. the final refit
+    'n_candidates': 40,
     'factor': 3,
-    'scoring': 'accuracy',      # ranking metric; f1_macro/f1_weighted are logged too
+    'scoring': 'accuracy',      # f1_macro and f1_weighted are logged too
     'output_path': 'data/submission_neural.csv',
 }
 
@@ -94,6 +78,7 @@ _TRAINING_SPACE = {
     'classifier__class_weight': [None, 'sqrt', 'balanced'],
     'classifier__label_smoothing': [0.0, 0.1],
 }
+# roberta-base only at 256 tokens: at 512 it is ~4x slower than the distilled models.
 NEURAL_SEARCH_SPACE = [
     {**_PREPROCESSING_SPACE, **_TRAINING_SPACE,
      'classifier__model_name': ['distilroberta-base', 'distilbert-base-uncased'],
@@ -118,9 +103,5 @@ RUN = {
 
 SEARCH_GRID = {
     'preprocessing__remove_section_headers': [False, True],
-    'preprocessing__remove_performer_names': [True],
-    'preprocessing__remove_production_credits': [True],
-    'preprocessing__remove_unknown_markers': [True],
-    'preprocessing__remove_unbracketed_headers': [True],
     'remove_duplicates': [False, True],
 }
