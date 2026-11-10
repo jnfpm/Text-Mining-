@@ -6,6 +6,7 @@ from .features import TextModel, build_word2vec_features
 class TfidfModel(TextModel):
     """Linear SVM on TF-IDF, counts or mean Word2Vec vectors."""
 
+    # **features: vectorizer settings (ngram_range, min_df, ...) handled by TextModel
     def __init__(self, C=1.0, class_weight=None, max_iter=5000, dual='auto', random_state=39,
                  vector_size=100, window=5, min_count=2, word2vec_epochs=5, **features):
         super().__init__(**features)

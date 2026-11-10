@@ -29,10 +29,13 @@ def truncate_ids(ids, budget, mode):
     """Keep `budget` tokens: the start ('head'), or 1/4 start + 3/4 end ('head_tail', Sun et al. 2019)."""
     if mode not in ('head', 'head_tail'):
         raise ValueError("truncation must be 'head' or 'head_tail'.")
-    if len(ids) <= budget or mode == 'head':
+    if len(ids) <= budget:
+        return ids
+    if mode == 'head':
         return ids[:budget]
-    head = budget // 4
-    return ids[:head] + ids[len(ids) - (budget - head):]
+    head_size = budget // 4
+    tail_size = budget - head_size
+    return ids[:head_size] + ids[-tail_size:]
 
 
 class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
@@ -68,12 +71,14 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
         """Token ids padded to max_length, with the model's start/end tokens around them."""
         ids = self.tokenizer_([str(text) for text in texts], add_special_tokens=False,
                               verbose=False)['input_ids']  # no too-long warnings: we truncate below
-        special = self.tokenizer_('')['input_ids']  # e.g. [<s>, </s>] or [CLS, SEP]
+        # Tokenizing an empty string gives just the model's start and end tokens,
+        # e.g. [<s>, </s>] for RoBERTa or [CLS, SEP] for BERT.
+        start_token, end_token = self.tokenizer_('')['input_ids']
+        budget = self.max_length - 2
         input_ids = np.full((len(ids), self.max_length), self.tokenizer_.pad_token_id, dtype=np.int64)
-        attention_mask = np.zeros((len(ids), self.max_length), dtype=np.int64)
-        for row, sequence in enumerate(ids):
-            sequence = special[:1] + truncate_ids(sequence, self.max_length - len(special),
-                                                  self.truncation) + special[1:]
+        attention_mask = np.zeros((len(ids), self.max_length), dtype=np.int64)  # 1 = real token, 0 = padding
+        for row, song_ids in enumerate(ids):
+            sequence = [start_token] + truncate_ids(song_ids, budget, self.truncation) + [end_token]
             input_ids[row, :len(sequence)] = sequence
             attention_mask[row, :len(sequence)] = 1
         return {'input_ids': input_ids, 'attention_mask': attention_mask}
@@ -101,9 +106,17 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
         encoded = self.label_encoder_.transform(y).astype(np.int64)
         self.tokenizer_ = AutoTokenizer.from_pretrained(self.model_name)
 
-        total_steps = self.max_epochs * math.ceil(len(encoded) * (1 - self.valid_fraction) / self.batch_size)
+        train_rows = len(encoded) * (1 - self.valid_fraction)
+        total_steps = self.max_epochs * math.ceil(train_rows / self.batch_size)
         weights = class_weights(encoded, len(self.classes_), self.class_weight)
-        callbacks = [
+        if weights is not None:
+            weights = torch.tensor(weights)
+
+        callbacks = []
+        if self.verbose:
+            callbacks.append(('progress', EpochProgressBar(self.max_epochs)))
+        callbacks += [
+            # learning rate rises linearly during warmup, then falls linearly to 0
             ('lr_schedule', LRScheduler(
                 get_linear_schedule_with_warmup, step_every='batch',
                 num_warmup_steps=int(self.warmup_ratio * total_steps),
@@ -111,8 +124,6 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
             ('clip', GradientNormClipping(self.grad_clip)),
             ('early_stopping', EarlyStopping(patience=self.patience, load_best=True)),
         ]
-        if self.verbose:
-            callbacks.insert(0, ('progress', EpochProgressBar(self.max_epochs)))
         self.net_ = NeuralNetClassifier(
             TransformerModule,
             module__model_name=self.model_name,
@@ -122,7 +133,7 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
             module__bf16=self.bf16,
             criterion=torch.nn.CrossEntropyLoss,
             criterion__label_smoothing=self.label_smoothing,
-            criterion__weight=None if weights is None else torch.tensor(weights),
+            criterion__weight=weights,
             optimizer=torch.optim.AdamW,
             optimizer__weight_decay=self.weight_decay,
             lr=self.learning_rate,
@@ -141,8 +152,16 @@ class NeuralNetworkClassifier(ClassifierMixin, BaseEstimator):
             print(f'[neural] {self.model_name} | {len(encoded):,} rows | max_length={self.max_length} '
                   f'| up to {self.max_epochs} epochs | device={self.device}', flush=True)
         self.net_.fit(self._encode(X), encoded)
-        self.history_ = [{key: epoch.get(key) for key in ('epoch', 'train_loss', 'valid_loss', 'valid_acc', 'dur')}
-                         for epoch in self.net_.history]
+        # Keep the per-epoch losses for the report.
+        self.history_ = []
+        for epoch in self.net_.history:
+            self.history_.append({
+                'epoch': epoch['epoch'],
+                'train_loss': epoch['train_loss'],
+                'valid_loss': epoch['valid_loss'],
+                'valid_acc': epoch['valid_acc'],
+                'dur': epoch['dur'],
+            })
         return self
 
     def predict_proba(self, X):

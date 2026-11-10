@@ -4,6 +4,7 @@ from .features import TextModel
 
 
 class MultinomialNaiveBayesModel(TextModel):
+    # **features: vectorizer settings (ngram_range, min_df, ...) handled by TextModel
     def __init__(self, alpha=1.0, fit_prior=True, **features):
         super().__init__(**features)
         self.alpha = alpha

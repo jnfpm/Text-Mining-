@@ -110,12 +110,23 @@ class PreprocessingPipeline(TransformerMixin, BaseEstimator):
 
     def metadata_prefixes(self, frame):
         fields = INPUT_FIELDS[self.input_fields]
-        separator = '\n' if self.preserve_lines else ' '
+        if self.preserve_lines:
+            separator = '\n'
+        else:
+            separator = ' '
         prefixes = []
-        for values in zip(*(frame[field] for field in fields)):
-            texts = [format_field(field, value) for field, value in zip(fields, values)]
-            prefix = ' | '.join(f'{field}: {text}' for field, text in zip(fields, texts) if text)
-            prefixes.append((prefix.lower() if self.lowercase else prefix) + separator if prefix else '')
+        for _, row in frame.iterrows():
+            parts = []
+            for field in fields:
+                text = format_field(field, row[field])
+                if text != '':
+                    parts.append(f'{field}: {text}')
+            prefix = ' | '.join(parts)
+            if self.lowercase:
+                prefix = prefix.lower()
+            if prefix != '':
+                prefix = prefix + separator
+            prefixes.append(prefix)
         return prefixes
 
     def fit(self, X, y=None):
