@@ -53,3 +53,11 @@ ipywidgets
 
 # Mentioned in section 0.3 of the notebook
 geocoder
+
+# Used in tools/ and the EDA notebook
+wordcloud
+better-profanity
+
+# Neural network (optional, only with an NVIDIA GPU - disabled in the code)
+# torch      -> CUDA build: pip install torch --index-url https://download.pytorch.org/whl/cu128
+# skorch
