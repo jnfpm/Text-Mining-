@@ -224,8 +224,9 @@ def run_halving_search(experiment, data_dir, output_path, search_space,
 
 
 def main(argv=None):
-    from config import (MODEL, MODEL_PARAMETERS, NEURAL_SEARCH, NEURAL_SEARCH_SPACE,
-                        PREPROCESSING, RUN, SEARCH_GRID)
+    from config import MODEL, MODEL_PARAMETERS, PREPROCESSING, RUN, SEARCH_GRID
+    # NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+    # from config import NEURAL_SEARCH, NEURAL_SEARCH_SPACE
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', choices=list(MODEL_PARAMETERS), default=MODEL)
@@ -233,13 +234,15 @@ def main(argv=None):
     parser.add_argument('--output')
     parser.add_argument('--sample-size', type=int, default=RUN['sample_size'])
     parser.add_argument('--grid-search', action='store_true', default=RUN['grid_search'])
-    parser.add_argument('--halving-search', action='store_true',
-                        help='Neural model only: search settings from config.NEURAL_SEARCH_SPACE.')
+    # NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+    # parser.add_argument('--halving-search', action='store_true',
+    #                     help='Neural model only: search settings from config.NEURAL_SEARCH_SPACE.')
     parser.add_argument('--remove-duplicates', action=argparse.BooleanOptionalAction,
                         default=RUN['remove_duplicates'])
     args = parser.parse_args(argv)
-    if args.halving_search and args.model != 'neural_network':
-        parser.error('--halving-search needs --model neural_network.')
+    # NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+    # if args.halving_search and args.model != 'neural_network':
+    #     parser.error('--halving-search needs --model neural_network.')
 
     experiment = ClassificationModel(
         model=get_model(args.model, **MODEL_PARAMETERS[args.model]),
@@ -249,16 +252,21 @@ def main(argv=None):
         random_state=RUN['random_state'], n_jobs=RUN['n_jobs'],
         parameter_grid=SEARCH_GRID,
     )
-    if args.halving_search:
-        output = args.output if args.output else NEURAL_SEARCH['output_path']
-        run_halving_search(
-            experiment, args.data_dir, output,
-            NEURAL_SEARCH_SPACE, NEURAL_SEARCH['n_candidates'], NEURAL_SEARCH['factor'],
-            NEURAL_SEARCH['scoring'], RUN['report_dir'], args.sample_size,
-        )
-    else:
-        output = args.output if args.output else RUN['output_path']
-        experiment.run(args.data_dir, output, args.grid_search, args.sample_size, RUN['report_dir'])
+    # NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+    # if args.halving_search:
+    #     output = args.output if args.output else NEURAL_SEARCH['output_path']
+    #     run_halving_search(
+    #         experiment, args.data_dir, output,
+    #         NEURAL_SEARCH_SPACE, NEURAL_SEARCH['n_candidates'], NEURAL_SEARCH['factor'],
+    #         NEURAL_SEARCH['scoring'], RUN['report_dir'], args.sample_size,
+    #     )
+    # else:
+    #     output = args.output if args.output else RUN['output_path']
+    #     experiment.run(args.data_dir, output, args.grid_search, args.sample_size, RUN['report_dir'])
+
+    # Classical models (tfidf, complement_nb, multinomial_nb)
+    output = args.output if args.output else RUN['output_path']
+    experiment.run(args.data_dir, output, args.grid_search, args.sample_size, RUN['report_dir'])
 
 
 if __name__ == '__main__':

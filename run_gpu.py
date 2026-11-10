@@ -27,12 +27,13 @@ for stream in (sys.stdout, sys.stderr):
 from classification_model import main
 
 
-if __name__ == '__main__':
-    import torch
+# NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+# if __name__ == '__main__':
+#     import torch
 
-    if not torch.cuda.is_available():
-        sys.exit('CUDA is not available. Run this with .venv\\Scripts\\python.exe '
-                 '(PyTorch CUDA build), not the system Python.')
-    print(f'CUDA OK: {torch.cuda.get_device_name(0)} | torch {torch.__version__} '
-          f'(CUDA {torch.version.cuda})', flush=True)
-    main(['--model', 'neural_network', '--halving-search', *sys.argv[1:]])
+#     if not torch.cuda.is_available():
+#         sys.exit('CUDA is not available. Run this with .venv\\Scripts\\python.exe '
+#                  '(PyTorch CUDA build), not the system Python.')
+#     print(f'CUDA OK: {torch.cuda.get_device_name(0)} | torch {torch.__version__} '
+#           f'(CUDA {torch.version.cuda})', flush=True)
+#     main(['--model', 'neural_network', '--halving-search', *sys.argv[1:]])

@@ -1,6 +1,7 @@
 from .complement_nb import ComplementNaiveBayesModel
 from .multinomial_nb import MultinomialNaiveBayesModel
-from .neural_network import NeuralNetworkClassifier, NeuralNetworkModel
+# NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+# from .neural_network import NeuralNetworkClassifier, NeuralNetworkModel
 from .tfidf import TfidfModel
 
 
@@ -8,7 +9,8 @@ MODELS = {
     'tfidf': TfidfModel,
     'complement_nb': ComplementNaiveBayesModel,
     'multinomial_nb': MultinomialNaiveBayesModel,
-    'neural_network': NeuralNetworkModel,
+    # NEURAL NETWORK DISABLED (needs an NVIDIA GPU): uncomment to use it.
+    # 'neural_network': NeuralNetworkModel,
 }
 
 
