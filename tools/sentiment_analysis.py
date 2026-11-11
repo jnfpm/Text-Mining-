@@ -18,6 +18,12 @@ from scipy.stats import pearsonr
 from sklearn.feature_extraction.text import CountVectorizer
 from vaderSentiment.vaderSentiment import normalize
 from wordcloud import WordCloud
+from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 RANDOM_STATE = 42
 LANGUAGE_CONFIDENCE = 0.80
@@ -683,3 +689,52 @@ def plot_genre_clouds(df_sample, max_words=50):
         ax.set_title(genre)
     plt.tight_layout()
     plt.show()
+
+def build_sentiment_features(df_lines, df_song_primary):
+    """Per-song sentiment features from deduplicated line scores."""
+    lines = df_lines[df_lines["line_version"].eq("deduplicated")]
+    grouped = lines.groupby("song_key")
+    features = pd.DataFrame({
+        "vader_mean": grouped["vader_compound"].mean(),
+        "vader_std": grouped["vader_compound"].std().fillna(0),
+        "vader_pos_share": grouped["vader_label"].apply(lambda s: (s == "Positive").mean()),
+        "vader_neg_share": grouped["vader_label"].apply(lambda s: (s == "Negative").mean()),
+        "textblob_mean": grouped["textblob_polarity"].mean(),
+        "textblob_std": grouped["textblob_polarity"].std().fillna(0),
+        "subjectivity_mean": grouped["textblob_subjectivity"].mean(),
+    })
+    return df_song_primary[["song_key", "tag"]].merge(
+        features, left_on="song_key", right_index=True
+    )
+
+
+def evaluate_genre_classification(df_features, df_sample, n_splits=5):
+    """Compare genre classifiers using sentiment features, TF-IDF, or both."""
+    data = df_features.merge(df_sample[["song_key", "lyrics_clean"]], on="song_key")
+    sentiment_cols = [c for c in df_features.columns if c not in ("song_key", "tag")]
+    text = ("text", TfidfVectorizer(
+        stop_words="english", min_df=3, max_features=3000,
+        token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z']+\b"), "lyrics_clean")
+    numeric = ("sentiment", StandardScaler(), sentiment_cols)
+
+    def logreg():
+        return LogisticRegression(max_iter=1000, class_weight="balanced")
+
+    setups = {
+        "Majority-class baseline": ([numeric], DummyClassifier(strategy="prior")),
+        "Sentiment features only": ([numeric], logreg()),
+        "TF-IDF only": ([text], logreg()),
+        "TF-IDF + sentiment": ([text, numeric], logreg()),
+    }
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    rows = {}
+    for name, (blocks, model) in setups.items():
+        pipeline = Pipeline([("features", ColumnTransformer(blocks)), ("model", model)])
+        scores = cross_validate(pipeline, data, data["tag"], cv=cv,
+                                scoring=["accuracy", "f1_macro"])
+        rows[name] = {
+            "accuracy": scores["test_accuracy"].mean(),
+            "macro_f1": scores["test_f1_macro"].mean(),
+            "macro_f1_std": scores["test_f1_macro"].std(),
+        }
+    return pd.DataFrame(rows).T
