@@ -21,7 +21,6 @@ __pycache__/
 .RData
 .Ruserdata
 data/predictions*.csv
-reports/runs/
 *.keras
 *.joblib
 
