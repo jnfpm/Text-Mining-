@@ -1,0 +1,100 @@
+{
+  "model": "MultinomialNaiveBayesModel",
+  "model_parameters": {
+    "representation": "count",
+    "ngram_range": [
+      1,
+      2
+    ],
+    "min_df": 2,
+    "max_df": 1.0,
+    "max_features": 20000,
+    "stop_words": null,
+    "sublinear_tf": true,
+    "alpha": 1.0,
+    "fit_prior": true
+  },
+  "metrics": {
+    "accuracy": 0.51383692068314,
+    "f1_macro": 0.44550331398037807,
+    "f1_weighted": 0.5277340036884027
+  },
+  "classification_report": {
+    "country": {
+      "precision": 0.17081673306772907,
+      "recall": 0.494949494949495,
+      "f1-score": 0.2539800074046649,
+      "support": 693.0
+    },
+    "misc": {
+      "precision": 0.37169517884914466,
+      "recall": 0.6356382978723404,
+      "f1-score": 0.4690873405299313,
+      "support": 1128.0
+    },
+    "pop": {
+      "precision": 0.6439393939393939,
+      "recall": 0.31261212773591673,
+      "f1-score": 0.42089371980676327,
+      "support": 11148.0
+    },
+    "rap": {
+      "precision": 0.8496402877697842,
+      "recall": 0.765193728132694,
+      "f1-score": 0.8052089725233518,
+      "support": 7717.0
+    },
+    "rb": {
+      "precision": 0.18261857426867367,
+      "recall": 0.5181305398871877,
+      "f1-score": 0.27005459890802186,
+      "support": 1241.0
+    },
+    "rock": {
+      "precision": 0.38714624285515126,
+      "recall": 0.5481642321358073,
+      "f1-score": 0.4537952447095351,
+      "support": 5066.0
+    },
+    "accuracy": 0.51383692068314,
+    "macro avg": {
+      "precision": 0.4343094017916462,
+      "recall": 0.5457814034522402,
+      "f1-score": 0.44550331398037807,
+      "support": 26993.0
+    },
+    "weighted avg": {
+      "precision": 0.6098199955205119,
+      "recall": 0.51383692068314,
+      "f1-score": 0.5277340036884027,
+      "support": 26993.0
+    }
+  },
+  "best_parameters": {},
+  "preprocessing": {
+    "lowercase": true,
+    "normalize_unicode": true,
+    "output_column": "lyrics_processed",
+    "preserve_lines": true,
+    "remove_bracket_symbols": false,
+    "remove_performer_names": true,
+    "remove_production_credits": true,
+    "remove_repeated_lines": false,
+    "remove_section_headers": false,
+    "remove_sung_brackets": false,
+    "remove_unbracketed_headers": true,
+    "remove_unknown_markers": true,
+    "repair_mixed_script": false,
+    "strip_punctuation": false,
+    "text_column": "lyrics"
+  },
+  "remove_duplicates": false,
+  "training_rows": 107974,
+  "fitted_training_rows": 107974,
+  "validation_rows": 26993,
+  "final_training_rows": 134967,
+  "test_rows": 33742,
+  "sample_size": null,
+  "grid_search": false,
+  "output": "C:\\Users\\CCEROS~1\\AppData\\Local\\Temp\\claude\\377c7abac5796516\\f590542c-b482-4bfc-9ae0-f0ad648756a0\\scratchpad\\submission_multinomial_nb.csv"
+}

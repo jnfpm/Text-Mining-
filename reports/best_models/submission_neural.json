@@ -1,0 +1,93 @@
+{
+  "model": "NeuralNetworkModel",
+  "scoring": "accuracy",
+  "best_parameters": {
+    "remove_duplicates": true,
+    "preprocessing__strip_punctuation": false,
+    "preprocessing__remove_section_headers": false,
+    "preprocessing__remove_repeated_lines": true,
+    "preprocessing__lowercase": false,
+    "preprocessing__input_fields": "all",
+    "classifier__weight_decay": 0.0,
+    "classifier__warmup_ratio": 0.06,
+    "classifier__truncation": "head",
+    "classifier__pooling": "cls",
+    "classifier__model_name": "roberta-base",
+    "classifier__max_length": 256,
+    "classifier__learning_rate": 2e-05,
+    "classifier__label_smoothing": 0.1,
+    "classifier__dropout": 0.2,
+    "classifier__class_weight": null,
+    "classifier__batch_size": 16
+  },
+  "best_validation_metrics": {
+    "candidate": 61,
+    "elapsed_hours": 3.741,
+    "fitted_rows": 107957,
+    "validation_rows": 26988,
+    "accuracy": 0.7694530902623388,
+    "f1_macro": 0.6891275048798541,
+    "f1_weighted": 0.764964569528388,
+    "parameters": {
+      "remove_duplicates": true,
+      "preprocessing__input_fields": "all",
+      "preprocessing__lowercase": false,
+      "preprocessing__remove_repeated_lines": true,
+      "preprocessing__remove_section_headers": false,
+      "preprocessing__strip_punctuation": false,
+      "classifier__batch_size": 16,
+      "classifier__class_weight": null,
+      "classifier__dropout": 0.2,
+      "classifier__label_smoothing": 0.1,
+      "classifier__learning_rate": 2e-05,
+      "classifier__max_length": 256,
+      "classifier__model_name": "roberta-base",
+      "classifier__pooling": "cls",
+      "classifier__truncation": "head",
+      "classifier__warmup_ratio": 0.06,
+      "classifier__weight_decay": 0.0
+    },
+    "wrote_submission": "data\\submission_neural_search_best.csv"
+  },
+  "n_candidates": 40,
+  "factor": 3,
+  "n_resources_per_round": [
+    4998,
+    14994,
+    44982,
+    134946
+  ],
+  "n_candidates_per_round": [
+    40,
+    14,
+    5,
+    2
+  ],
+  "final_training_rows": 134967,
+  "final_history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.9871594591023766,
+      "valid_loss": 0.8947762992193569,
+      "valid_acc": 0.7660220789805142,
+      "dur": 1023.8696291446686
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.8608150948415895,
+      "valid_loss": 0.8736323617940268,
+      "valid_acc": 0.7749870341557383,
+      "dur": 1027.1670677661896
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.789185270558878,
+      "valid_loss": 0.8811817614601357,
+      "valid_acc": 0.7812847299399867,
+      "dur": 1028.0263013839722
+    }
+  ],
+  "test_rows": 33742,
+  "elapsed_hours": 4.721,
+  "output": "data\\submission_neural.csv"
+}
