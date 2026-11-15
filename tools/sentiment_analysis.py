@@ -566,6 +566,8 @@ def plot_vocabulary(frequencies, top_terms):
     cloud = WordCloud(
         background_color="white", max_words=120, width=700, height=400,
         random_state=RANDOM_STATE,
+        prefer_horizontal=1.0,
+        font_path=plt.matplotlib.font_manager.findfont("DejaVu Sans"),
     ).generate_from_frequencies(frequencies)
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
     axes[0].imshow(cloud, interpolation="bilinear")

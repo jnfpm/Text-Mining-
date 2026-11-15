@@ -12,6 +12,7 @@ Place this file next to ``sentiment_analysis.py`` in ``tools/``.
 import json
 import os
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import combinations
@@ -32,6 +33,10 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedKFold
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from tools.sentiment_analysis import (
     PRIMARY_COLOR,
     RANDOM_STATE,
@@ -40,7 +45,7 @@ from tools.sentiment_analysis import (
     get_lyric_lines,
 )
 
-LLM_MODEL = "claude-sonnet-5-5"  # any Claude model string works
+LLM_MODEL = "claude-sonnet-5"  # active Claude Sonnet model ID
 MAX_LYRIC_CHARS = 6000
 LLM_LABELS = {"negative": "Negative", "neutral": "Neutral", "positive": "Positive",
               "mixed": "Neutral"}  # "mixed" is kept in llm_label_raw for analysis
@@ -277,7 +282,7 @@ def evaluate_against_reference(df_ref, reference_col="llm_label",
             "macro_f1_ci_low": f1_low,
             "macro_f1_ci_high": f1_high,
             "weighted_kappa": weighted_kappa(y_true, y_pred),
-            "spearman_vs_llm_score": spearmanr(df_ref[score_col],
+            "spearman_vs_reference_score": spearmanr(df_ref[score_col],
                                                df_ref[reference_score_col]).statistic,
         }
         matrices[name] = pd.DataFrame(
@@ -347,16 +352,16 @@ def cross_validated_threshold(df_ref, score_col, reference_col="llm_label",
 # --------------------------------------------------------------------------- #
 # 4. Plots and human spot-check
 # --------------------------------------------------------------------------- #
-def plot_confusion_matrices(matrices):
+def plot_confusion_matrices(matrices, reference_name="Manual reference"):
     """Row-normalised confusion matrices (reference on rows) for each tool."""
     fig, axes = plt.subplots(1, len(matrices), figsize=(5.5 * len(matrices), 4.5))
     for ax, (name, matrix) in zip(np.atleast_1d(axes), matrices.items()):
         shares = matrix.div(matrix.sum(axis=1).replace(0, np.nan), axis=0)
         sns.heatmap(shares, annot=matrix, fmt="d", cmap=sns.light_palette(PRIMARY_COLOR, as_cmap=True),
                     vmin=0, vmax=1, cbar=False, ax=ax)
-        ax.set_title(f"{name} vs LLM reference")
+        ax.set_title(f"{name} vs {reference_name.lower()}")
         ax.set_xlabel("Tool prediction")
-        ax.set_ylabel("LLM reference")
+        ax.set_ylabel(reference_name)
     plt.tight_layout()
     plt.show()
 

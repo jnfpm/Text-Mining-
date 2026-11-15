@@ -51,6 +51,9 @@ notebook
 ipykernel
 ipywidgets
 
+# Optional LLM-based reference labelling (tools/sentiment_analysis_validation.py)
+anthropic
+
 # Mentioned in section 0.3 of the notebook
 geocoder
 
